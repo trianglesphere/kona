@@ -63,7 +63,7 @@ fmt-native-check:
 
 # Lint the workspace
 lint-native: fmt-native-check lint-docs
-  cargo +nightly clippy --workspace --all --all-features --all-targets -- -D warnings
+  cargo clippy --workspace --all --all-features --all-targets -- -D warnings
 
 # Lint the workspace (mips arch). Currently, only the `kona-std-fpvm` crate is linted for the `cannon` target, as it is the only crate with architecture-specific code.
 lint-cannon:
