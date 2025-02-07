@@ -75,6 +75,7 @@ where
         Ok(())
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     /// Takes the inner list of the [OrderedListWalker], returning it and setting the inner list to
     /// [None].
     pub fn take_inner(&mut self) -> Option<VecDeque<(Bytes, Bytes)>> {
