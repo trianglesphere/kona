@@ -20,7 +20,7 @@ cfg_if! {
         impl BasicKernelInterface for NativeClientIO {
             fn write(fd: FileDescriptor, buf: &[u8]) -> IOResult<usize> {
                 unsafe {
-                    let mut file = File::from_raw_fd(fd as i32);
+                    let mut file = File::from_raw_fd(fd.into());
                     file.write_all(buf).map_err(|_| IOError(-9))?;
                     std::mem::forget(file);
                     Ok(buf.len())
@@ -29,7 +29,7 @@ cfg_if! {
 
             fn read(fd: FileDescriptor, buf: &mut [u8]) -> IOResult<usize> {
                 unsafe {
-                    let mut file = File::from_raw_fd(fd as i32);
+                    let mut file = File::from_raw_fd(fd.into());
                     file.read(buf).map_err(|_| IOError(-9))?;
                     std::mem::forget(file);
                     Ok(buf.len())

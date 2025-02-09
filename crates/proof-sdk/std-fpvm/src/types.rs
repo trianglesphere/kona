@@ -17,6 +17,8 @@ pub enum FileDescriptor {
     PreimageRead,
     /// Write-only. Used to request pre-images.
     PreimageWrite,
+    /// Wildcard file descriptor.
+    Wildcard(usize),
 }
 
 impl From<FileDescriptor> for usize {
@@ -29,6 +31,7 @@ impl From<FileDescriptor> for usize {
             FileDescriptor::HintWrite => 4,
             FileDescriptor::PreimageRead => 5,
             FileDescriptor::PreimageWrite => 6,
+            FileDescriptor::Wildcard(fd) => fd,
         }
     }
 }
