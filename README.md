@@ -9,10 +9,10 @@
 <p align="center">
   <a href="https://github.com/op-rs/kona/releases"><img src="https://img.shields.io/github/v/release/op-rs/kona?style=flat&labelColor=1C2C2E&color=C96329&logo=GitHub&logoColor=white"></a>
   <a href="https://docs.rs/kona-derive/"><img src="https://img.shields.io/docsrs/kona-derive?style=flat&labelColor=1C2C2E&color=C96329&logo=Rust&logoColor=white"></a>
-  <a href="https://github.com/op-rs/kona/actions/workflows/rust_ci.yaml"><img src="https://github.com/op-rs/kona/actions/workflows/rust_ci.yaml/badge.svg?label=ci" alt="CI"></a>
-  <a href="https://codecov.io/gh/op-rs/kona"><img src="https://img.shields.io/codecov/c/gh/op-rs/kona?style=flat" alt="Codecov"></a>
-  <a href="https://github.com/op-rs/kona/blob/main/LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-d1d1f6.svg?label=license&labelColor=2a2f35" alt="License"></a>
-  <a href="https://op-rs.github.io/kona"><img src="https://img.shields.io/badge/Book-854a15?logo=mdBook&labelColor=2a2f35" alt="Book"></a>
+  <a href="https://github.com/op-rs/kona/actions/workflows/rust_ci.yaml"><img src="https://github.com/op-rs/kona/actions/workflows/rust_ci.yaml/badge.svg?style=flat&labelColor=1C2C2E&color=BEC5C9&logo=ci&logoColor=BEC5C9" alt="CI"></a>
+  <a href="https://codecov.io/gh/op-rs/kona"><img src="https://img.shields.io/codecov/c/gh/op-rs/kona?style=flat&labelColor=1C2C2E&color=BEC5C9&logoColor=BEC5C9" alt="Codecov"></a>
+  <a href="https://github.com/op-rs/kona/blob/main/LICENSE.md"><img src="https://img.shields.io/badge/License-MIT-d1d1f6.svg?style=flat&labelColor=1C2C2E&color=BEC5C9&label=license&logoColor=BEC5C9" alt="License"></a>
+  <a href="https://op-rs.github.io/kona"><img src="https://img.shields.io/badge/Book-854a15?style=flat&labelColor=1C2C2E&color=BEC5C9&logo=mdBook&logoColor=BEC5C9" alt="Book"></a>
 </p>
 
 <p align="center">
