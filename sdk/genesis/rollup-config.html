@@ -4,7 +4,7 @@
 <head>
     <!-- Book generated using mdBook -->
     <meta charset="UTF-8">
-    <title>Custom Providers - The Kona Book</title>
+    <title>Rollup Config - The Kona Book</title>
 
 
     <!-- Custom HTML head -->
@@ -91,7 +91,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../intro.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="../../rfc/intro.html"><strong aria-hidden="true">2.</strong> RFC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../rfc/monorepo.html"><strong aria-hidden="true">2.1.</strong> Monorepo</a></li></ol></li><li class="chapter-item expanded "><a href="../../archives/intro.html"><strong aria-hidden="true">3.</strong> Archives</a></li><li class="chapter-item expanded "><a href="../../fpp-dev/intro.html"><strong aria-hidden="true">4.</strong> Fault Proof Program Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../fpp-dev/env.html"><strong aria-hidden="true">4.1.</strong> Environment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../fpp-dev/targets.html"><strong aria-hidden="true">4.1.1.</strong> Supported Targets</a></li></ol></li><li class="chapter-item expanded "><a href="../../fpp-dev/prologue.html"><strong aria-hidden="true">4.2.</strong> Prologue</a></li><li class="chapter-item expanded "><a href="../../fpp-dev/execution.html"><strong aria-hidden="true">4.3.</strong> Execution</a></li><li class="chapter-item expanded "><a href="../../fpp-dev/epilogue.html"><strong aria-hidden="true">4.4.</strong> Epilogue</a></li></ol></li><li class="chapter-item expanded "><a href="../../sdk/intro.html"><strong aria-hidden="true">5.</strong> Kona SDK</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/fpvm-backend.html"><strong aria-hidden="true">5.1.</strong> FPVM Backend</a></li><li class="chapter-item expanded "><a href="../../sdk/custom-backend.html"><strong aria-hidden="true">5.2.</strong> Custom Backend</a></li><li class="chapter-item expanded "><a href="../../sdk/exec-ext.html"><strong aria-hidden="true">5.3.</strong> kona-executor Extensions</a></li><li class="chapter-item expanded "><a href="../../sdk/pipeline/intro.html"><strong aria-hidden="true">5.4.</strong> kona-derive Pipeline</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/pipeline/providers.html" class="active"><strong aria-hidden="true">5.4.1.</strong> Custom Providers</a></li><li class="chapter-item expanded "><a href="../../sdk/pipeline/stages.html"><strong aria-hidden="true">5.4.2.</strong> Stage Swapping</a></li><li class="chapter-item expanded "><a href="../../sdk/pipeline/signaling.html"><strong aria-hidden="true">5.4.3.</strong> Signaling</a></li></ol></li><li class="chapter-item expanded "><a href="../../sdk/genesis/index.html"><strong aria-hidden="true">5.5.</strong> Genesis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/genesis/rollup-config.html"><strong aria-hidden="true">5.5.1.</strong> Rollup Config</a></li><li class="chapter-item expanded "><a href="../../sdk/genesis/system-config.html"><strong aria-hidden="true">5.5.2.</strong> System Config</a></li></ol></li><li class="chapter-item expanded "><a href="../../sdk/consensus.html"><strong aria-hidden="true">5.6.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../../sdk/engine.html"><strong aria-hidden="true">5.7.</strong> Engine RPC Types</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/index.html"><strong aria-hidden="true">5.8.</strong> Protocol</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/protocol/block-info.html"><strong aria-hidden="true">5.8.1.</strong> BlockInfo and L2BlockInfo Types</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/frames.html"><strong aria-hidden="true">5.8.2.</strong> Frames</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/channels.html"><strong aria-hidden="true">5.8.3.</strong> Channels</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/batches.html"><strong aria-hidden="true">5.8.4.</strong> Batches</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../../examples/index.html"><strong aria-hidden="true">6.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../examples/load-a-rollup-config.html"><strong aria-hidden="true">6.1.</strong> Load a Rollup Config</a></li><li class="chapter-item expanded "><a href="../../examples/new-l1-block-info-tx-hardfork.html"><strong aria-hidden="true">6.2.</strong> Create a new L1BlockInfoTx Hardfork Variant</a></li><li class="chapter-item expanded "><a href="../../examples/frames-to-batch.html"><strong aria-hidden="true">6.3.</strong> Transform Frames to a Batch</a></li><li class="chapter-item expanded "><a href="../../examples/batch-to-frames.html"><strong aria-hidden="true">6.4.</strong> Transform a Batch into Frames</a></li></ol></li><li class="chapter-item expanded "><a href="../../glossary.html"><strong aria-hidden="true">7.</strong> Glossary</a></li><li class="chapter-item expanded "><a href="../../CONTRIBUTING.html"><strong aria-hidden="true">8.</strong> Contributing</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../intro.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li class="chapter-item expanded "><a href="../../rfc/intro.html"><strong aria-hidden="true">2.</strong> RFC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../rfc/monorepo.html"><strong aria-hidden="true">2.1.</strong> Monorepo</a></li></ol></li><li class="chapter-item expanded "><a href="../../archives/intro.html"><strong aria-hidden="true">3.</strong> Archives</a></li><li class="chapter-item expanded "><a href="../../fpp-dev/intro.html"><strong aria-hidden="true">4.</strong> Fault Proof Program Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../fpp-dev/env.html"><strong aria-hidden="true">4.1.</strong> Environment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../fpp-dev/targets.html"><strong aria-hidden="true">4.1.1.</strong> Supported Targets</a></li></ol></li><li class="chapter-item expanded "><a href="../../fpp-dev/prologue.html"><strong aria-hidden="true">4.2.</strong> Prologue</a></li><li class="chapter-item expanded "><a href="../../fpp-dev/execution.html"><strong aria-hidden="true">4.3.</strong> Execution</a></li><li class="chapter-item expanded "><a href="../../fpp-dev/epilogue.html"><strong aria-hidden="true">4.4.</strong> Epilogue</a></li></ol></li><li class="chapter-item expanded "><a href="../../sdk/intro.html"><strong aria-hidden="true">5.</strong> Kona SDK</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/fpvm-backend.html"><strong aria-hidden="true">5.1.</strong> FPVM Backend</a></li><li class="chapter-item expanded "><a href="../../sdk/custom-backend.html"><strong aria-hidden="true">5.2.</strong> Custom Backend</a></li><li class="chapter-item expanded "><a href="../../sdk/exec-ext.html"><strong aria-hidden="true">5.3.</strong> kona-executor Extensions</a></li><li class="chapter-item expanded "><a href="../../sdk/pipeline/intro.html"><strong aria-hidden="true">5.4.</strong> kona-derive Pipeline</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/pipeline/providers.html"><strong aria-hidden="true">5.4.1.</strong> Custom Providers</a></li><li class="chapter-item expanded "><a href="../../sdk/pipeline/stages.html"><strong aria-hidden="true">5.4.2.</strong> Stage Swapping</a></li><li class="chapter-item expanded "><a href="../../sdk/pipeline/signaling.html"><strong aria-hidden="true">5.4.3.</strong> Signaling</a></li></ol></li><li class="chapter-item expanded "><a href="../../sdk/genesis/index.html"><strong aria-hidden="true">5.5.</strong> Genesis</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/genesis/rollup-config.html" class="active"><strong aria-hidden="true">5.5.1.</strong> Rollup Config</a></li><li class="chapter-item expanded "><a href="../../sdk/genesis/system-config.html"><strong aria-hidden="true">5.5.2.</strong> System Config</a></li></ol></li><li class="chapter-item expanded "><a href="../../sdk/consensus.html"><strong aria-hidden="true">5.6.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../../sdk/engine.html"><strong aria-hidden="true">5.7.</strong> Engine RPC Types</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/index.html"><strong aria-hidden="true">5.8.</strong> Protocol</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../sdk/protocol/block-info.html"><strong aria-hidden="true">5.8.1.</strong> BlockInfo and L2BlockInfo Types</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/frames.html"><strong aria-hidden="true">5.8.2.</strong> Frames</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/channels.html"><strong aria-hidden="true">5.8.3.</strong> Channels</a></li><li class="chapter-item expanded "><a href="../../sdk/protocol/batches.html"><strong aria-hidden="true">5.8.4.</strong> Batches</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../../examples/index.html"><strong aria-hidden="true">6.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../examples/load-a-rollup-config.html"><strong aria-hidden="true">6.1.</strong> Load a Rollup Config</a></li><li class="chapter-item expanded "><a href="../../examples/new-l1-block-info-tx-hardfork.html"><strong aria-hidden="true">6.2.</strong> Create a new L1BlockInfoTx Hardfork Variant</a></li><li class="chapter-item expanded "><a href="../../examples/frames-to-batch.html"><strong aria-hidden="true">6.3.</strong> Transform Frames to a Batch</a></li><li class="chapter-item expanded "><a href="../../examples/batch-to-frames.html"><strong aria-hidden="true">6.4.</strong> Transform a Batch into Frames</a></li></ol></li><li class="chapter-item expanded "><a href="../../glossary.html"><strong aria-hidden="true">7.</strong> Glossary</a></li><li class="chapter-item expanded "><a href="../../CONTRIBUTING.html"><strong aria-hidden="true">8.</strong> Contributing</a></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle">
                 <div class="sidebar-resize-indicator"></div>
@@ -160,7 +160,7 @@
                         <a href="https://github.com/op-rs/kona" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                        <a href="https://github.com/op-rs/kona/edit/main/book/src/sdk/pipeline/providers.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/op-rs/kona/edit/main/book/src/sdk/genesis/rollup-config.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
@@ -190,103 +190,33 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="trait-abstracted-providers"><a class="header" href="#trait-abstracted-providers">Trait-abstracted Providers</a></h1>
-<p>Kona's derivation pipeline pulls in data from sources that are trait
-abstracted so the pipeline can be generic over various data sources.
-Note, "data sources" is used interchangeably with "trait-abstracted
-providers" for the purpose of this document.</p>
-<p>The key traits required for the pipeline are the following.</p>
-<ul>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/traits/trait.ChainProvider.html"><code>ChainProvider</code></a></li>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/traits/trait.L2ChainProvider.html"><code>L2ChainProvider</code></a></li>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/traits/trait.DataAvailabilityProvider.html"><code>DataAvailabilityProvider</code></a></li>
-</ul>
-<p>The <a href="https://crates.io/crates/kona-derive-alloy"><code>kona-derive-alloy</code></a> crate provides <code>std</code> implementations
-of these traits using <a href="https://github.com/alloy-rs/alloy">Alloy</a>'s <code>reqwest</code>-backed providers.</p>
-<h2 id="provider-usage"><a class="header" href="#provider-usage">Provider Usage</a></h2>
-<p>Although trait-abstracted Providers are used throughout the pipeline and
-its stages, the <a href="https://docs.rs/kona-derive/latest/kona_derive/pipeline/struct.PipelineBuilder.html"><code>PipelineBuilder</code></a> makes constructing the pipeline
-generic over the providers. An example is shown below, where the three
-required trait implementations are the providers stubbed with <code>todo!()</code>.</p>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use std::sync::Arc;
-use kona_genesis::RollupConfig;
-use kona_derive::pipeline::PipelineBuilder;
-use kona_derive::attributes::StatefulAttributesBuilder;
-
-// The rollup config for your chain.
-let cfg = Arc::new(RollupConfig::default());
-
-// Must implement the `ChainProvider` trait.
-let chain_provider = todo!("your chain provider");
-
-// Must implement the `L2ChainProvider` trait.
-let l2_chain_provider = todo!("your l2 chain provider");
-
-// Must implement the `DataAvailabilityProvider` trait.
-let dap = todo!("your data availability provider");
-
-// Generic over the providers.
-let attributes = StatefulAttributesBuilder::new(
-   cfg.clone(),
-   l2_chain_provider.clone(),
-   chain_provider.clone(),
-);
-
-// Construct a new derivation pipeline.
-let pipeline = PipelineBuilder::new()
-   .rollup_config(cfg)
-   .dap_source(dap)
-   .l2_chain_provider(l2_chain_provider)
-   .chain_provider(chain_provider)
-   .builder(attributes)
-   .origin(BlockInfo::default())
-   .build();
-<span class="boring">}</span></code></pre></pre>
-<h2 id="implementing-a-custom-data-availability-provider"><a class="header" href="#implementing-a-custom-data-availability-provider">Implementing a Custom Data Availability Provider</a></h2>
-<blockquote>
-<p>Notice</p>
-<p>The only required method for the <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/trait.DataAvailabilityProvider.html"><code>DataAvailabilityProvider</code></a>
-trait is the <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/trait.DataAvailabilityProvider.html#tymethod.next"><code>next</code></a> method.</p>
-</blockquote>
-<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>use async_trait::async_trait;
-use alloy_primitives::Bytes;
-use kona_protocol::BlockInfo;
-use kona_derive::traits::DataAvailabilityProvider;
-use kona_derive::errors::PipelineResult;
-
-/// ExampleAvail
-///
-/// An example implementation of the `DataAvailabilityProvider` trait.
-#[derive(Debug)]
-pub struct ExampleAvail {
-   // Place your data in here
-}
-
-#[async_trait]
-impl DataAvailabilityProvider for ExampleAvail {
-   type Item = Bytes;
-
-   async fn next(&amp;self, block_ref: &amp;BlockInfo) -&gt; PipelineResult&lt;Self::Item&gt; {
-      todo!("return an AsyncIterator implementation here")
-   }
-}
-<span class="boring">}</span></code></pre></pre>
+                        <h1 id="rollup-configs"><a class="header" href="#rollup-configs">Rollup Configs</a></h1>
+<p>Rollup configurations are a consensus construct used to configure an Optimism Consensus client.
+When an OP Stack chain is deployed into production or consensus nodes are configured to sync the chain,
+certain consensus parameters can be configured. These parameters are defined in the
+[OP Stack specs][spec-configurability].</p>
+<p>Consensus parameters are consumed by OP Stack software through the <code>RollupConfig</code> type defined in the
+[<code>maili-genesis</code>][genesis] crate.</p>
+<h2 id="rollupconfig-type"><a class="header" href="#rollupconfig-type"><code>RollupConfig</code> Type</a></h2>
+<p>The [<code>RollupConfig</code>][rc] type is defined in [<code>maili-genesis</code>][genesis].</p>
+<p>Rollup configs can be loaded for a given chain id using [<code>maili-registry</code>][registry].
+The <code>ROLLUP_CONFIG</code> mapping in the <code>maili-registry</code> provides a mapping from chain ids
+to rollup config.</p>
 <!-- Links -->
+<!-- External -->
+<!-- Kona links -->
+<!-- People -->
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        <a rel="prev" href="../../sdk/pipeline/intro.html" class="mobile-nav-chapters previous"
+                        <a rel="prev" href="../../sdk/genesis/index.html" class="mobile-nav-chapters previous"
                             title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                             <i class="fa fa-angle-left"></i>
                         </a>
 
-                        <a rel="next prefetch" href="../../sdk/pipeline/stages.html" class="mobile-nav-chapters next"
+                        <a rel="next prefetch" href="../../sdk/genesis/system-config.html" class="mobile-nav-chapters next"
                             title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                             <i class="fa fa-angle-right"></i>
                         </a>
@@ -297,12 +227,12 @@ impl DataAvailabilityProvider for ExampleAvail {
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                <a rel="prev" href="../../sdk/pipeline/intro.html" class="nav-chapters previous" title="Previous chapter"
+                <a rel="prev" href="../../sdk/genesis/index.html" class="nav-chapters previous" title="Previous chapter"
                     aria-label="Previous chapter" aria-keyshortcuts="Left">
                     <i class="fa fa-angle-left"></i>
                 </a>
 
-                <a rel="next prefetch" href="../../sdk/pipeline/stages.html" class="nav-chapters next" title="Next chapter"
+                <a rel="next prefetch" href="../../sdk/genesis/system-config.html" class="nav-chapters next" title="Next chapter"
                     aria-label="Next chapter" aria-keyshortcuts="Right">
                     <i class="fa fa-angle-right"></i>
                 </a>
