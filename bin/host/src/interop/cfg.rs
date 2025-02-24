@@ -2,18 +2,18 @@
 
 use super::{InteropHintHandler, InteropLocalInputs};
 use crate::{
-    cli::{
-        cli_styles,
-        parser::{parse_b256, parse_bytes},
-    },
-    eth::http_provider,
-    DiskKeyValueStore, MemoryKeyValueStore, OfflineHostBackend, OnlineHostBackend,
-    OnlineHostBackendCfg, PreimageServer, SharedKeyValueStore, SplitKeyValueStore,
+    eth::http_provider, DiskKeyValueStore, MemoryKeyValueStore, OfflineHostBackend,
+    OnlineHostBackend, OnlineHostBackendCfg, PreimageServer, SharedKeyValueStore,
+    SplitKeyValueStore,
 };
 use alloy_primitives::{Bytes, B256};
 use alloy_provider::{Provider, RootProvider};
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use kona_bin_utils::{
+    cli_parsers::{parse_b256, parse_bytes},
+    cli_styles,
+};
 use kona_genesis::RollupConfig;
 use kona_preimage::{
     BidirectionalChannel, Channel, HintReader, HintWriter, OracleReader, OracleServer,
@@ -172,10 +172,10 @@ impl InteropHost {
 
     /// Returns `true` if the host is running in offline mode.
     pub const fn is_offline(&self) -> bool {
-        self.l1_node_address.is_none() &&
-            self.l2_node_addresses.is_none() &&
-            self.l1_beacon_address.is_none() &&
-            self.data_dir.is_some()
+        self.l1_node_address.is_none()
+            && self.l2_node_addresses.is_none()
+            && self.l1_beacon_address.is_none()
+            && self.data_dir.is_some()
     }
 
     /// Reads the [RollupConfig]s from the file system and returns a map of L2 chain ID ->
