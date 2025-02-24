@@ -201,7 +201,7 @@ which introduces Isthmus hardfork changes to the <code>L1BlockInfoTx</code> with
 </blockquote>
 <h2 id="required-genesis-updates"><a class="header" href="#required-genesis-updates">Required Genesis Updates</a></h2>
 <p>The first updates that need to be made are to <a href="https://docs.rs/maili-genesis/latest/maili_genesis/index.html"><code>maili-genesis</code></a>
-types, namely the <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.RollupConfig.html"><code>RollupConfig</code></a> and <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.HardForkConfiguration.html"><code>HardForkConfiguration</code></a>.</p>
+types, namely the <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.RollupConfig.html"><code>RollupConfig</code></a> and <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.HardForkConfig.html"><code>HardForkConfig</code></a>.</p>
 <p>First, add a timestamp field to the <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.RollupConfig.html"><code>RollupConfig</code></a>. Let's use the
 hardfork name "Glacier" as an example.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -231,10 +231,10 @@ accessor to call this method (let's use "Isthmus" as the prior hardfork).</p>
         self.glacier_time.map_or(false, |t| timestamp &gt;= t)
     }
 <span class="boring">}</span></code></pre></pre>
-<p>Lastly, add the "Glacier" timestamp to the <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.HardForkConfiguration.html"><code>HardForkConfiguration</code></a>.</p>
+<p>Lastly, add the "Glacier" timestamp to the <a href="https://docs.rs/maili-genesis/latest/maili_genesis/struct.HardForkConfig.html"><code>HardForkConfig</code></a>.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>pub struct HardForkConfiguration {
+</span>pub struct HardForkConfig {
     ...
     /// Glacier hardfork activation time
     pub glacier_time: Option&lt;u64&gt;,
