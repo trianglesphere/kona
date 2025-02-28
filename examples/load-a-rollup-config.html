@@ -196,8 +196,8 @@ rollup config for the given L2 Chain ID.</p>
 <p>Let's load the Rollup Config for OP Mainnet which hash chain id 10.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>use maili_registry::ROLLUP_CONFIGS;
-use maili_genesis::OP_MAINNET_CHAIN_ID;
+</span>use kona_registry::ROLLUP_CONFIGS;
+use kona_genesis::OP_MAINNET_CHAIN_ID;
 
 // Load a rollup config from the chain id.
 let op_mainnet_config = ROLLUP_CONFIGS.get(&amp;OP_MAINNET_CHAIN_ID).expect("infallible");
@@ -207,7 +207,7 @@ assert_eq!(op_mainnet_config.chain_id, OP_MAINNET_CHAIN_ID);
 <span class="boring">}</span></code></pre></pre>
 <blockquote>
 <p>Available Configs</p>
-<p><a href="https://crates.io/crates/maili-registry">maili-registry</a> dynamically provides all rollup configs
+<p><a href="https://crates.io/crates/kona-registry">kona-registry</a> dynamically provides all rollup configs
 from the <a href="https://github.com/ethereum-optimism/superchain-registry">superchain-registry</a> for their respective chain ids.
 Note though, that this requires <code>serde</code> since it deserializes the rollup
 configs dynamically from json files.</p>
