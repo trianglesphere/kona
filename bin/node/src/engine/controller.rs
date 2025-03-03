@@ -3,13 +3,9 @@
 //! See: <https://github.com/ethereum-optimism/optimism/blob/develop/op-node/rollup/engine/engine_controller.go#L46>
 
 use alloy_rpc_types_engine::payload::{PayloadStatus, PayloadStatusEnum};
-use kona_genesis::RollupConfig;
 use kona_protocol::L2BlockInfo;
 
-use crate::{
-    engine::{EngineClient, EngineState, EngineUpdateError, SyncStatus},
-    sync::SyncConfig,
-};
+use crate::engine::{ControllerBuilder, EngineClient, EngineState, EngineUpdateError, SyncStatus};
 
 /// The engine controller.
 #[derive(Debug, Clone)]
@@ -33,17 +29,9 @@ pub struct EngineController {
 }
 
 impl EngineController {
-    /// Creates a new engine controller.
-    pub fn new(client: EngineClient, config: &RollupConfig, sync: SyncConfig) -> Self {
-        let sync_status = SyncStatus::from(sync.sync_mode);
-        Self {
-            client,
-            sync_status,
-            state: EngineState::new(L2BlockInfo::default()),
-            blocktime: config.block_time,
-            ecotone_timestamp: config.hardforks.ecotone_time,
-            canyon_timestamp: config.hardforks.canyon_time,
-        }
+    /// Returns the [`ControllerBuilder`] that is used to construct the [`EngineController`].
+    pub fn builder(client: EngineClient) -> ControllerBuilder {
+        ControllerBuilder::new(client)
     }
 
     /// Returns if the engine is syncing.
@@ -95,8 +83,6 @@ impl EngineController {
         // TODO: log attempt to update forkchoice state while EL syncing
         // }
 
-        // TODO: initialize unknowns
-
         if self.state.unsafe_head().block_info.number <
             self.state.finalized_head().block_info.number
         {
@@ -131,8 +117,9 @@ impl EngineController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::SyncMode;
+    use crate::sync::{SyncConfig, SyncMode};
     use alloy_rpc_types_engine::JwtSecret;
+    use kona_genesis::RollupConfig;
     use std::sync::Arc;
 
     fn test_controller(sync_mode: SyncMode) -> EngineController {
@@ -152,7 +139,25 @@ mod tests {
             Arc::clone(&rollup_config),
             JwtSecret::random(),
         );
-        EngineController::new(client, &rollup_config, sync_config)
+        let state = EngineState {
+            unsafe_head: L2BlockInfo::default(),
+            cross_unsafe_head: L2BlockInfo::default(),
+            pending_safe_head: L2BlockInfo::default(),
+            local_safe_head: L2BlockInfo::default(),
+            safe_head: L2BlockInfo::default(),
+            finalized_head: L2BlockInfo::default(),
+            backup_unsafe_head: None,
+            forkchoice_update_needed: false,
+            need_fcu_call_backup_unsafe_reorg: false,
+        };
+        EngineController {
+            client,
+            sync_status: SyncStatus::from(sync_config.sync_mode),
+            state,
+            blocktime: 0,
+            ecotone_timestamp: None,
+            canyon_timestamp: None,
+        }
     }
 
     #[test]

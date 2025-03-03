@@ -4012,6 +4012,7 @@ dependencies = [
 name = "kona-node"
 version = "0.1.0"
 dependencies = [
+ "alloy-eips",
  "alloy-network",
  "alloy-primitives",
  "alloy-provider",
