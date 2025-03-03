@@ -2,8 +2,9 @@
 
 use anyhow::{Result, bail};
 use kona_genesis::RollupConfig;
+use kona_sync::SyncStatus;
 
-use crate::{EngineClient, EngineController, EngineState, SyncStatus};
+use crate::{EngineClient, EngineController, EngineState};
 
 /// A builder for the [EngineController].
 #[derive(Debug, Clone)]

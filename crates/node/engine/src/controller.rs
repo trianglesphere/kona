@@ -4,8 +4,9 @@
 
 use alloy_rpc_types_engine::payload::{PayloadStatus, PayloadStatusEnum};
 use kona_protocol::L2BlockInfo;
+use kona_sync::SyncStatus;
 
-use crate::{ControllerBuilder, EngineClient, EngineState, EngineUpdateError, SyncStatus};
+use crate::{ControllerBuilder, EngineClient, EngineState, EngineUpdateError};
 
 /// The engine controller.
 #[derive(Debug, Clone)]

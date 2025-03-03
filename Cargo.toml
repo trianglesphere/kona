@@ -80,6 +80,7 @@ kona-driver = { path = "crates/protocol/driver", version = "0.2.3", default-feat
 kona-interop = { path = "crates/protocol/interop", version = "0.1.2", default-features = false }
 
 # Node
+kona-sync = { path = "crates/node/sync", version = "0.1.0", default-features = false }
 kona-engine = { path = "crates/node/engine", version = "0.1.0", default-features = false }
 
 # External

@@ -13,6 +13,7 @@ workspace = true
 
 [dependencies]
 # workspace
+kona-sync.workspace = true
 kona-genesis.workspace = true
 kona-protocol.workspace = true
 kona-providers-alloy.workspace = true
