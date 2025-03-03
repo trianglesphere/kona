@@ -38,7 +38,7 @@ ignore:
   - "crates/utilities/serde/maili"
   # Node - Work in Progress
   - "bin/node"
-  - "crates/node/engine"
+  - "crates/node"
 
 
 # Make comments less noisy
