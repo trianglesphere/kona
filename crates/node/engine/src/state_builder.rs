@@ -4,7 +4,7 @@ use alloy_eips::eip1898::BlockNumberOrTag;
 use anyhow::{Result, bail};
 use kona_protocol::L2BlockInfo;
 
-use crate::engine::{EngineClient, EngineState};
+use crate::{EngineClient, EngineState};
 
 /// A builder for the [EngineState].
 ///
@@ -36,7 +36,7 @@ pub struct StateBuilder {
 
 impl StateBuilder {
     /// Constructs a new [StateBuilder] from the provided [EngineClient].
-    pub fn new(client: EngineClient) -> Self {
+    pub const fn new(client: EngineClient) -> Self {
         Self {
             client,
             unsafe_head: None,

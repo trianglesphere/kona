@@ -3,7 +3,7 @@
 use alloy_rpc_types_engine::ForkchoiceState;
 use kona_protocol::L2BlockInfo;
 
-use crate::engine::{EngineClient, StateBuilder};
+use crate::{EngineClient, StateBuilder};
 
 /// The chain state viewed by the engine controller.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -42,7 +42,7 @@ pub struct EngineState {
 
 impl EngineState {
     /// Returns the [StateBuilder] that should be used to construct the [EngineState].
-    pub fn builder(client: EngineClient) -> StateBuilder {
+    pub const fn builder(client: EngineClient) -> StateBuilder {
         StateBuilder::new(client)
     }
 
@@ -53,7 +53,7 @@ impl EngineState {
     /// - `finalized_block` = `finalized_head`
     ///
     /// If the block info is not yet available, the default values are used.
-    pub fn create_forkchoice_state(&self) -> ForkchoiceState {
+    pub const fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
             head_block_hash: self.unsafe_head.block_info.hash,
             safe_block_hash: self.safe_head.block_info.hash,
@@ -62,37 +62,37 @@ impl EngineState {
     }
 
     /// Returns the current unsafe head.
-    pub fn unsafe_head(&self) -> L2BlockInfo {
+    pub const fn unsafe_head(&self) -> L2BlockInfo {
         self.unsafe_head
     }
 
     /// Returns the current cross-verified unsafe head.
-    pub fn cross_unsafe_head(&self) -> L2BlockInfo {
+    pub const fn cross_unsafe_head(&self) -> L2BlockInfo {
         self.cross_unsafe_head
     }
 
     /// Returns the current pending safe head.
-    pub fn pending_safe_head(&self) -> L2BlockInfo {
+    pub const fn pending_safe_head(&self) -> L2BlockInfo {
         self.pending_safe_head
     }
 
     /// Returns the current local safe head.
-    pub fn local_safe_head(&self) -> L2BlockInfo {
+    pub const fn local_safe_head(&self) -> L2BlockInfo {
         self.local_safe_head
     }
 
     /// Returns the current safe head.
-    pub fn safe_head(&self) -> L2BlockInfo {
+    pub const fn safe_head(&self) -> L2BlockInfo {
         self.safe_head
     }
 
     /// Returns the current finalized head.
-    pub fn finalized_head(&self) -> L2BlockInfo {
+    pub const fn finalized_head(&self) -> L2BlockInfo {
         self.finalized_head
     }
 
     /// Returns the current backup unsafe head.
-    pub fn backup_unsafe_head(&self) -> Option<L2BlockInfo> {
+    pub const fn backup_unsafe_head(&self) -> Option<L2BlockInfo> {
         self.backup_unsafe_head
     }
 

@@ -5,7 +5,7 @@
 use alloy_rpc_types_engine::payload::{PayloadStatus, PayloadStatusEnum};
 use kona_protocol::L2BlockInfo;
 
-use crate::engine::{ControllerBuilder, EngineClient, EngineState, EngineUpdateError, SyncStatus};
+use crate::{ControllerBuilder, EngineClient, EngineState, EngineUpdateError, SyncStatus};
 
 /// The engine controller.
 #[derive(Debug, Clone)]
@@ -30,12 +30,12 @@ pub struct EngineController {
 
 impl EngineController {
     /// Returns the [`ControllerBuilder`] that is used to construct the [`EngineController`].
-    pub fn builder(client: EngineClient) -> ControllerBuilder {
+    pub const fn builder(client: EngineClient) -> ControllerBuilder {
         ControllerBuilder::new(client)
     }
 
     /// Returns if the engine is syncing.
-    pub fn is_syncing(&self) -> bool {
+    pub const fn is_syncing(&self) -> bool {
         self.sync_status.is_syncing()
     }
 
@@ -117,18 +117,12 @@ impl EngineController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::{SyncConfig, SyncMode};
     use alloy_rpc_types_engine::JwtSecret;
     use kona_genesis::RollupConfig;
     use std::sync::Arc;
 
-    fn test_controller(sync_mode: SyncMode) -> EngineController {
+    fn test_controller(sync_status: SyncStatus) -> EngineController {
         let rollup_config = RollupConfig { block_time: 0, ..Default::default() };
-        let sync_config = SyncConfig {
-            sync_mode,
-            skip_sync_start_check: false,
-            supports_post_finalization_elsync: false,
-        };
         let engine_url: url::Url = "http://localhost:8080".parse().unwrap();
         let rpc_url: url::Url = "http://localhost:8080".parse().unwrap();
 
@@ -152,7 +146,7 @@ mod tests {
         };
         EngineController {
             client,
-            sync_status: SyncStatus::from(sync_config.sync_mode),
+            sync_status,
             state,
             blocktime: 0,
             ecotone_timestamp: None,
@@ -162,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_check_payload_status_cl_sync() {
-        let mut controller = test_controller(SyncMode::ConsensusLayer);
+        let mut controller = test_controller(SyncStatus::ConsensusLayer);
 
         let status = PayloadStatus { status: PayloadStatusEnum::Valid, latest_valid_hash: None };
         assert!(controller.check_payload_status(status));
@@ -176,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_check_payload_status_el_sync() {
-        let mut controller = test_controller(SyncMode::ExecutionLayer);
+        let mut controller = test_controller(SyncStatus::ExecutionLayerWillStart);
         assert_eq!(controller.sync_status, SyncStatus::ExecutionLayerWillStart);
 
         let status = PayloadStatus { status: PayloadStatusEnum::Valid, latest_valid_hash: None };
@@ -204,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_check_forkchoice_updated_status_cl_sync() {
-        let mut controller = test_controller(SyncMode::ConsensusLayer);
+        let mut controller = test_controller(SyncStatus::ConsensusLayer);
 
         let status = PayloadStatus { status: PayloadStatusEnum::Valid, latest_valid_hash: None };
         assert!(controller.check_forkchoice_updated_status(status));
@@ -215,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_check_forkchoice_updated_status_el_sync() {
-        let mut controller = test_controller(SyncMode::ExecutionLayer);
+        let mut controller = test_controller(SyncStatus::ExecutionLayerWillStart);
         assert_eq!(controller.sync_status, SyncStatus::ExecutionLayerWillStart);
 
         let status = PayloadStatus { status: PayloadStatusEnum::Valid, latest_valid_hash: None };
