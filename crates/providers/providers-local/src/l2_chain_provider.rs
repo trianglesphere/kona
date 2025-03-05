@@ -9,7 +9,7 @@ use kona_derive::{
     errors::{PipelineError, PipelineErrorKind},
     traits::L2ChainProvider,
 };
-use kona_genesis::{RollupConfig, SystemConfig};
+use kona_genesis::{ChainGenesis, RollupConfig, SystemConfig};
 use kona_protocol::{BatchValidationProvider, BlockInfo, L2BlockInfo};
 use op_alloy_consensus::OpBlock;
 use parking_lot::RwLock;
@@ -101,7 +101,11 @@ impl BatchValidationProvider for InMemoryL2ChainProvider {
     /// Returns the [L2BlockInfo] given a block number.
     ///
     /// Errors if the block does not exist.
-    async fn l2_block_info_by_number(&mut self, _: u64) -> Result<L2BlockInfo, Self::Error> {
+    async fn l2_block_info_by_number(
+        &mut self,
+        _: u64,
+        _: &ChainGenesis,
+    ) -> Result<L2BlockInfo, Self::Error> {
         todo!()
     }
 

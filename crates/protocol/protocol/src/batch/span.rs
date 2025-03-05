@@ -445,7 +445,7 @@ impl SpanBatch {
             parent_num = l2_safe_head.block_info.number -
                 (l2_safe_head.block_info.timestamp - self.starting_timestamp()) / cfg.block_time -
                 1;
-            parent_block = match fetcher.l2_block_info_by_number(parent_num).await {
+            parent_block = match fetcher.l2_block_info_by_number(parent_num, &cfg.genesis).await {
                 Ok(block) => block,
                 Err(e) => {
                     warn!("failed to fetch L2 block number {parent_num}: {e}");

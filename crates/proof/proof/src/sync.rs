@@ -25,7 +25,9 @@ pub async fn new_pipeline_cursor<O>(
 where
     O: CommsClient + FlushableCache + FlushableCache + Send + Sync + Debug,
 {
-    let safe_head_info = l2_chain_provider.l2_block_info_by_number(safe_header.number).await?;
+    let safe_head_info = l2_chain_provider
+        .l2_block_info_by_number(safe_header.number, &rollup_config.genesis)
+        .await?;
     let l1_origin = chain_provider.block_info_by_number(safe_head_info.l1_origin.number).await?;
 
     // Walk back the starting L1 block by `channel_timeout` to ensure that the full channel is

@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use kona_derive::traits::L2ChainProvider;
 use kona_driver::PipelineCursor;
 use kona_executor::TrieDBProvider;
-use kona_genesis::{RollupConfig, SystemConfig};
+use kona_genesis::{ChainGenesis, RollupConfig, SystemConfig};
 use kona_mpt::{OrderedListWalker, TrieHinter, TrieNode, TrieProvider};
 use kona_preimage::{CommsClient, PreimageKey, PreimageKeyType};
 use kona_protocol::{BatchValidationProvider, L2BlockInfo, to_system_config};
@@ -101,12 +101,16 @@ impl<T: CommsClient> OracleL2ChainProvider<T> {
 impl<T: CommsClient + Send + Sync> BatchValidationProvider for OracleL2ChainProvider<T> {
     type Error = OracleProviderError;
 
-    async fn l2_block_info_by_number(&mut self, number: u64) -> Result<L2BlockInfo, Self::Error> {
+    async fn l2_block_info_by_number(
+        &mut self,
+        number: u64,
+        genesis: &ChainGenesis,
+    ) -> Result<L2BlockInfo, Self::Error> {
         // Get the block at the given number.
         let block = self.block_by_number(number).await?;
 
         // Construct the system config from the payload.
-        L2BlockInfo::from_block_and_genesis(&block, &self.rollup_config.genesis)
+        L2BlockInfo::from_block_and_genesis(&block, &genesis)
             .map_err(OracleProviderError::BlockInfo)
     }
 

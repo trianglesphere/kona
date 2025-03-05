@@ -7,6 +7,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![cfg_attr(not(test), warn(unused_crate_dependencies))]
 
+mod ext;
+pub use ext::{L2ChainProviderError, L2ChainProviderExt};
+
 mod beacon_client;
 pub use beacon_client::{
     APIConfigResponse, APIGenesisResponse, BeaconClient, OnlineBeaconClient, ReducedConfigData,

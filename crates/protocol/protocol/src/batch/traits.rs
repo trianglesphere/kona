@@ -3,6 +3,7 @@
 use alloc::{boxed::Box, string::ToString};
 use async_trait::async_trait;
 use core::fmt::Display;
+use kona_genesis::ChainGenesis;
 use op_alloy_consensus::OpBlock;
 
 use crate::L2BlockInfo;
@@ -16,7 +17,11 @@ pub trait BatchValidationProvider {
     /// Returns the [L2BlockInfo] given a block number.
     ///
     /// Errors if the block does not exist.
-    async fn l2_block_info_by_number(&mut self, number: u64) -> Result<L2BlockInfo, Self::Error>;
+    async fn l2_block_info_by_number(
+        &mut self,
+        number: u64,
+        genesis: &ChainGenesis,
+    ) -> Result<L2BlockInfo, Self::Error>;
 
     /// Returns the [OpBlock] for a given number.
     ///
