@@ -11,5 +11,5 @@ pub trait EngineTask {
     type Input;
 
     /// Executes the task.
-    async fn execute(&mut self, input: Self::Input) -> Result<(), Self::Error>;
+    async fn execute(input: Self::Input) -> Result<(), Self::Error>;
 }
