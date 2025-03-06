@@ -40,4 +40,16 @@ pub enum InsertTaskOut {
     UpdatePayloadStatus(PayloadStatus),
     /// Failed to process new unsafe payload.
     FailedToProcessNewPayload,
+
+    /// Update engine state with non finalized el sync new payload.
+    NewPayloadNotFinalizedUpdate(L2BlockInfo),
+
+    /// Cross safe update.
+    CrossSafeUpdate(L2BlockInfo),
+
+    /// Update the engine state with the forkchoice updated state.
+    UpdateForkchoiceState(PayloadStatus, L2BlockInfo),
+
+    /// Forkchoice updated event.
+    ForkchoiceUpdated,
 }
