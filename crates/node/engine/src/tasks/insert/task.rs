@@ -1,21 +1,20 @@
 //! A task to insert an unsafe payload into the execution engine.
 
 use alloy_eips::BlockNumberOrTag;
-use alloy_rpc_types_engine::{
-    ExecutionPayloadInputV2, ExecutionPayloadV1, ForkchoiceState, PayloadStatus, PayloadStatusEnum,
-};
+use alloy_provider::ext::EngineApi;
+use alloy_rpc_types_engine::{ExecutionPayload, ExecutionPayloadInputV2, ForkchoiceState};
 use kona_protocol::L2BlockInfo;
-use kona_rpc::OpAttributesWithParent;
 use op_alloy_provider::ext::engine::OpEngineApi;
+use op_alloy_rpc_types_engine::OpNetworkPayloadEnvelope;
 use std::sync::Arc;
 
 use crate::{
-    EngineClient, EngineNewPayloadVersion, EngineState, EngineTask, InsertTaskError,
-    InsertTaskInput, InsertTaskOut, SyncStatus,
+    EngineClient, EngineState, EngineTask, InsertTaskError, InsertTaskInput, InsertTaskOut,
+    SyncStatus,
 };
 
 /// The input type for the [InsertTask].
-type Input = (Arc<EngineClient>, EngineNewPayloadVersion, OpAttributesWithParent, L2BlockInfo);
+type Input = (Arc<EngineClient>, OpNetworkPayloadEnvelope, L2BlockInfo);
 
 /// An external handle to communicate with a [InsertTask] spawned
 /// in a new thread.
@@ -119,40 +118,19 @@ impl EngineTask for InsertTask {
             }
         }
 
-        let (client, version, attributes, block_info) = input;
-        let response = match version {
-            EngineNewPayloadVersion::V2 => {
-                let input = ExecutionPayloadInputV2 {
-                    execution_payload: ExecutionPayloadV1 {
-                        parent_hash: attributes.parent.block_info.hash,
-                        fee_recipient: attributes
-                            .attributes
-                            .payload_attributes
-                            .suggested_fee_recipient,
-                        state_root: Default::default(),
-                        receipts_root: Default::default(),
-                        logs_bloom: Default::default(),
-                        prev_randao: attributes.attributes.payload_attributes.prev_randao,
-                        block_number: block_info.block_info.number,
-                        gas_limit: attributes.attributes.gas_limit.unwrap_or(0),
-                        gas_used: Default::default(),
-                        timestamp: attributes.attributes.payload_attributes.timestamp,
-                        extra_data: Default::default(),
-                        base_fee_per_gas: Default::default(),
-                        block_hash: block_info.block_info.hash,
-                        transactions: attributes.attributes.transactions.unwrap_or_default(),
-                    },
-                    withdrawals: attributes.attributes.payload_attributes.withdrawals,
+        let (client, envelope, block_info) = input;
+        let response = match envelope.payload {
+            ExecutionPayload::V1(payload) => client.new_payload_v1(payload).await,
+            ExecutionPayload::V2(payload) => {
+                let payload_input = ExecutionPayloadInputV2 {
+                    execution_payload: payload.payload_inner,
+                    withdrawals: Some(payload.withdrawals),
                 };
-                client.new_payload_v2(input).await
+                client.new_payload_v2(payload_input).await
             }
-            EngineNewPayloadVersion::V3 => {
-                // client.new_payload_v3(attributes, block_info).await,
-                Ok(PayloadStatus { status: PayloadStatusEnum::Valid, latest_valid_hash: None })
-            }
-            EngineNewPayloadVersion::V4 => {
-                // client.new_payload_v4(attributes, block_info).await,
-                Ok(PayloadStatus { status: PayloadStatusEnum::Valid, latest_valid_hash: None })
+            ExecutionPayload::V3(payload) => {
+                let block_root = envelope.parent_beacon_block_root.unwrap_or_default();
+                client.new_payload_v3(payload, block_root).await
             }
         };
         let status = match response {
