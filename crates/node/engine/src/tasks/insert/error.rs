@@ -15,4 +15,7 @@ pub enum InsertTaskError {
     /// Failed to insert new payload.
     #[error("failed to insert new payload")]
     FailedToInsertNewPayload,
+    /// Temporary derivation error.
+    #[error("temporary derivation error")]
+    TemporaryDerivationError,
 }

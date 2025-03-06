@@ -1,6 +1,7 @@
 //! A task to insert an unsafe payload into the execution engine.
 
 use alloy_eips::BlockNumberOrTag;
+use alloy_primitives::B256;
 use alloy_provider::ext::EngineApi;
 use alloy_rpc_types_engine::{ExecutionPayload, ExecutionPayloadInputV2, ForkchoiceState};
 use kona_protocol::L2BlockInfo;
@@ -10,11 +11,12 @@ use std::sync::Arc;
 
 use crate::{
     EngineClient, EngineState, EngineTask, InsertTaskError, InsertTaskInput, InsertTaskOut,
-    SyncStatus,
+    SyncConfig, SyncStatus,
 };
 
 /// The input type for the [InsertTask].
-type Input = (Arc<EngineClient>, OpNetworkPayloadEnvelope, L2BlockInfo);
+/// The second argument is the genesis l2 hash expected to be provided by the rollup config.
+type Input = (Arc<EngineClient>, SyncConfig, B256, OpNetworkPayloadEnvelope, L2BlockInfo);
 
 /// An external handle to communicate with a [InsertTask] spawned
 /// in a new thread.
@@ -85,7 +87,7 @@ impl InsertTask {
     }
 
     /// Requests an [L2BlockInfo] for the [BlockNumberOrTag::Finalized].
-    pub async fn fetch_finalized_info(&mut self) -> Result<L2BlockInfo, InsertTaskError> {
+    pub async fn fetch_finalized_info(&mut self) -> Result<Option<L2BlockInfo>, InsertTaskError> {
         let msg = InsertTaskOut::L2BlockInfo(BlockNumberOrTag::Finalized);
         crate::send_until_success!("insert", self.sender, msg);
         let response = self.receiver.recv().await.map_err(|_| InsertTaskError::ReceiveFailed)?;
@@ -103,22 +105,40 @@ impl EngineTask for InsertTask {
     type Input = Input;
 
     async fn execute(&mut self, input: Self::Input) -> Result<(), Self::Error> {
-        // Request the sync status.
+        let (client, config, genesis, envelope, block_info) = input;
+
         let sync = self.fetch_sync_status().await?;
-        if sync == SyncStatus::ExecutionLayerWillStart {
+        // If post finalization EL sync, jump straight to EL sync start
+        if config.supports_post_finalization_elsync {
+            let msg = InsertTaskOut::UpdateSyncStatus(SyncStatus::ExecutionLayerStarted);
+            crate::send_until_success!("insert", self.sender, msg);
+        } else if sync == SyncStatus::ExecutionLayerWillStart {
             match self.fetch_finalized_info().await {
-                Ok(_) => {
-                    // If there is a finalized block, finish EL sync.
-                    let msg = InsertTaskOut::UpdateSyncStatus(SyncStatus::ExecutionLayerFinished);
+                Ok(Some(bi)) => {
+                    // If the genesis is finalized, start EL
+                    if bi.block_info.hash == genesis {
+                        let msg =
+                            InsertTaskOut::UpdateSyncStatus(SyncStatus::ExecutionLayerStarted);
+                        crate::send_until_success!("insert", self.sender, msg);
+                    } else {
+                        // If there is a finalized block, finish EL sync.
+                        let msg =
+                            InsertTaskOut::UpdateSyncStatus(SyncStatus::ExecutionLayerFinished);
+                        crate::send_until_success!("insert", self.sender, msg);
+                    }
+                }
+                Ok(None) => {
+                    // If no block is found, EL started
+                    let msg = InsertTaskOut::UpdateSyncStatus(SyncStatus::ExecutionLayerStarted);
                     crate::send_until_success!("insert", self.sender, msg);
                 }
                 Err(_) => {
-                    todo!()
+                    // Temporary derivation error.
+                    return Err(InsertTaskError::TemporaryDerivationError);
                 }
             }
         }
 
-        let (client, envelope, block_info) = input;
         let response = match envelope.payload {
             ExecutionPayload::V1(payload) => client.new_payload_v1(payload).await,
             ExecutionPayload::V2(payload) => {

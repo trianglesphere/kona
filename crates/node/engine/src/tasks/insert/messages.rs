@@ -11,7 +11,7 @@ pub enum InsertTaskInput {
     /// A response from the sync status request.
     SyncStatusResponse(SyncStatus),
     /// A response from feching L2 block info.
-    L2BlockInfoResponse(L2BlockInfo),
+    L2BlockInfoResponse(Option<L2BlockInfo>),
     /// An Engine State new payload response.
     NewPayloadResponse(bool),
     /// A response from the state snapshot request.
