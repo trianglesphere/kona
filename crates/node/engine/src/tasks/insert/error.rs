@@ -12,4 +12,7 @@ pub enum InsertTaskError {
     /// Received an invalid message response from the external actor.
     #[error("received invalid message response from external actor")]
     InvalidMessageResponse,
+    /// Failed to insert new payload.
+    #[error("failed to insert new payload")]
+    FailedToInsertNewPayload,
 }
