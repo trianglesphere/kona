@@ -4,11 +4,13 @@ use alloy_eips::eip1898::BlockNumberOrTag;
 use alloy_network::AnyNetwork;
 use alloy_network_primitives::BlockTransactionsKind;
 use alloy_primitives::{B256, BlockHash, Bytes};
-use alloy_provider::{Provider, RootProvider};
+use alloy_provider::{Provider, RootProvider, ext::EngineApi};
 use alloy_rpc_client::RpcClient;
 use alloy_rpc_types_engine::{
-    ClientVersionV1, ExecutionPayloadBodiesV1, ExecutionPayloadEnvelopeV2, ExecutionPayloadInputV2,
-    ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, JwtSecret, PayloadId, PayloadStatus,
+    ClientVersionV1, ExecutionPayloadBodiesV1, ExecutionPayloadEnvelopeV2,
+    ExecutionPayloadEnvelopeV3, ExecutionPayloadEnvelopeV4, ExecutionPayloadInputV2,
+    ExecutionPayloadV1, ExecutionPayloadV3, ForkchoiceState, ForkchoiceUpdated, JwtSecret,
+    PayloadAttributes, PayloadId, PayloadStatus,
 };
 use alloy_transport::TransportResult;
 use alloy_transport_http::{
@@ -79,6 +81,172 @@ impl EngineClient {
             block.map(|b| b.into_consensus()).ok_or_else(|| anyhow::anyhow!("Block not found"))?;
         L2BlockInfo::from_block_and_genesis(&block, &self.cfg.genesis)
             .map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+#[async_trait::async_trait]
+impl EngineApi<AnyNetwork> for EngineClient {
+    async fn new_payload_v1(&self, payload: ExecutionPayloadV1) -> TransportResult<PayloadStatus> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::new_payload_v1(&self.engine, payload)
+            .await
+    }
+
+    async fn new_payload_v2(
+        &self,
+        payload: ExecutionPayloadInputV2,
+    ) -> TransportResult<PayloadStatus> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::new_payload_v2(&self.engine, payload)
+            .await
+    }
+
+    async fn new_payload_v3(
+        &self,
+        payload: ExecutionPayloadV3,
+        parent_beacon_block_root: B256,
+    ) -> TransportResult<PayloadStatus> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::new_payload_v3(
+            &self.engine,
+            payload,
+            parent_beacon_block_root,
+        )
+        .await
+    }
+
+    async fn new_payload_v4(
+        &self,
+        payload: ExecutionPayloadV3,
+        parent_beacon_block_root: B256,
+    ) -> TransportResult<PayloadStatus> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::new_payload_v4(
+            &self.engine,
+            payload,
+            parent_beacon_block_root,
+        )
+        .await
+    }
+
+    async fn fork_choice_updated_v1(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
+    ) -> TransportResult<ForkchoiceUpdated> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::fork_choice_updated_v1(
+            &self.engine,
+            fork_choice_state,
+            payload_attributes,
+        )
+        .await
+    }
+
+    async fn fork_choice_updated_v2(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
+    ) -> TransportResult<ForkchoiceUpdated> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::fork_choice_updated_v2(
+            &self.engine,
+            fork_choice_state,
+            payload_attributes,
+        )
+        .await
+    }
+
+    async fn fork_choice_updated_v3(
+        &self,
+        fork_choice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
+    ) -> TransportResult<ForkchoiceUpdated> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::fork_choice_updated_v3(
+            &self.engine,
+            fork_choice_state,
+            payload_attributes,
+        )
+        .await
+    }
+
+    async fn get_payload_v1(&self, payload_id: PayloadId) -> TransportResult<ExecutionPayloadV1> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_payload_v1(
+            &self.engine,
+            payload_id,
+        )
+        .await
+    }
+
+    async fn get_payload_v2(
+        &self,
+        payload_id: PayloadId,
+    ) -> TransportResult<ExecutionPayloadEnvelopeV2> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_payload_v2(
+            &self.engine,
+            payload_id,
+        )
+        .await
+    }
+
+    async fn get_payload_v3(
+        &self,
+        payload_id: PayloadId,
+    ) -> TransportResult<ExecutionPayloadEnvelopeV3> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_payload_v3(
+            &self.engine,
+            payload_id,
+        )
+        .await
+    }
+
+    async fn get_payload_v4(
+        &self,
+        payload_id: PayloadId,
+    ) -> TransportResult<ExecutionPayloadEnvelopeV4> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_payload_v4(
+            &self.engine,
+            payload_id,
+        )
+        .await
+    }
+
+    async fn get_payload_bodies_by_hash_v1(
+        &self,
+        block_hashes: Vec<BlockHash>,
+    ) -> TransportResult<ExecutionPayloadBodiesV1> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_payload_bodies_by_hash_v1(
+            &self.engine,
+            block_hashes,
+        )
+    }
+
+    async fn get_payload_bodies_by_range_v1(
+        &self,
+        start: u64,
+        count: u64,
+    ) -> TransportResult<ExecutionPayloadBodiesV1> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_payload_bodies_by_range_v1(
+            &self.engine,
+            start,
+            count,
+        )
+    }
+
+    async fn get_client_version_v1(
+        &self,
+        client_version: ClientVersionV1,
+    ) -> TransportResult<Vec<ClientVersionV1>> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::get_client_version_v1(
+            &self.engine,
+            client_version,
+        )
+        .await
+    }
+
+    async fn exchange_capabilities(
+        &self,
+        capabilities: Vec<String>,
+    ) -> TransportResult<Vec<String>> {
+        <RootProvider<AnyNetwork> as EngineApi<AnyNetwork>>::exchange_capabilities(
+            &self.engine,
+            capabilities,
+        )
+        .await
     }
 }
 

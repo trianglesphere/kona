@@ -14,17 +14,6 @@ use crate::{
     InsertTaskInput, InsertTaskOut, SyncConfig, SyncStatus,
 };
 
-/// The input type for the [InsertTask].
-/// The third argument is the genesis l2 hash expected to be provided by the rollup config.
-type Input = (
-    Arc<EngineClient>,
-    Arc<SyncConfig>,
-    B256,
-    EngineForkchoiceVersion,
-    OpNetworkPayloadEnvelope,
-    L2BlockInfo,
-);
-
 /// An external handle to communicate with a [InsertTask] spawned
 /// in a new thread.
 #[derive(Debug)]
@@ -41,11 +30,24 @@ impl InsertTaskExt {
     /// Spawns the [InsertTask] in a new thread, returning an
     /// external-facing wrapper that can be used to communicate with
     /// the spawned task.
-    pub fn spawn(input: Input) -> Self {
+    pub fn spawn<N, T, E>(
+        client: E,
+        sync: Arc<SyncConfig>,
+        genesis: B256,
+        version: EngineForkchoiceVersion,
+        envelope: OpNetworkPayloadEnvelope,
+        block_info: L2BlockInfo,
+    ) -> Self
+    where
+        N: alloy_network::Network,
+        E: OpEngineApi<N, T> + EngineApi<N> + Clone + Send,
+    {
         let (sender, task_receiver) = tokio::sync::broadcast::channel(1);
         let (task_sender, receiver) = tokio::sync::broadcast::channel(1);
         let mut task = InsertTask::new(task_receiver, task_sender);
-        let handle = tokio::spawn(async move { task.execute(input).await });
+        let handle = tokio::spawn(async move {
+            task.execute((client, sync, genesis, version, envelope, block_info)).await
+        });
         Self { receiver, sender, handle }
     }
 }
@@ -104,17 +106,23 @@ impl InsertTask {
             Err(InsertTaskError::InvalidMessageResponse)
         }
     }
-}
 
-#[async_trait::async_trait]
-impl EngineTask for InsertTask {
-    type Error = InsertTaskError;
-    type Input = Input;
-
-    async fn execute(&mut self, input: Self::Input) -> Result<(), Self::Error> {
-        let (client, config, genesis, version, envelope, block_info) = input;
-
+    /// Executes the insert task.
+    async fn exec<N, T, E>(
+        &mut self,
+        client: E,
+        config: Arc<SyncConfig>,
+        genesis: B256,
+        version: EngineForkchoiceVersion,
+        envelope: OpNetworkPayloadEnvelope,
+        block_info: L2BlockInfo,
+    ) -> Result<(), InsertTaskError>
+    where
+        N: alloy_network::Network,
+        E: OpEngineApi<N, T> + EngineApi<N> + Clone + Send,
+    {
         let sync = self.fetch_sync_status().await?;
+
         // If post finalization EL sync, jump straight to EL sync start
         if config.supports_post_finalization_elsync {
             let msg = InsertTaskOut::UpdateSyncStatus(SyncStatus::ExecutionLayerStarted);
@@ -148,15 +156,19 @@ impl EngineTask for InsertTask {
 
         let block_root = envelope.parent_beacon_block_root.unwrap_or_default();
         let response = match envelope.payload.clone() {
-            ExecutionPayload::V1(payload) => client.new_payload_v1(payload).await,
+            ExecutionPayload::V1(payload) => {
+                <E as EngineApi<N>>::new_payload_v1(&client, payload).await
+            }
             ExecutionPayload::V2(payload) => {
                 let payload_input = ExecutionPayloadInputV2 {
                     execution_payload: payload.payload_inner,
                     withdrawals: Some(payload.withdrawals),
                 };
-                client.new_payload_v2(payload_input).await
+                <E as OpEngineApi<N, T>>::new_payload_v2(&client, payload_input).await
             }
-            ExecutionPayload::V3(payload) => client.new_payload_v3(payload, block_root).await,
+            ExecutionPayload::V3(payload) => {
+                <E as OpEngineApi<N, T>>::new_payload_v3(&client, payload, block_root).await
+            }
         };
         let status = match response {
             Ok(s) => s,
@@ -218,9 +230,15 @@ impl EngineTask for InsertTask {
 
         // Perform the fork choice update.
         let response = match version {
-            EngineForkchoiceVersion::V1 => client.fork_choice_updated_v1(fcu, None).await,
-            EngineForkchoiceVersion::V2 => client.fork_choice_updated_v2(fcu, None).await,
-            EngineForkchoiceVersion::V3 => client.fork_choice_updated_v3(fcu, None).await,
+            EngineForkchoiceVersion::V1 => {
+                <E as EngineApi<N, T>>::fork_choice_updated_v1(&client, fcu, None).await
+            }
+            EngineForkchoiceVersion::V2 => {
+                <E as OpEngineApi<N, T>>::fork_choice_updated_v2(&client, fcu, None).await
+            }
+            EngineForkchoiceVersion::V3 => {
+                <E as OpEngineApi<N, T>>::fork_choice_updated_v3(&client, fcu, None).await
+            }
         };
 
         let update = match response {
@@ -257,5 +275,25 @@ impl EngineTask for InsertTask {
         debug!(target: "insert", "(unsafe l2 block) Number {}", envelope.payload.block_number());
 
         Ok(())
+    }
+}
+
+type Input = (
+    EngineClient,
+    Arc<SyncConfig>,
+    B256,
+    EngineForkchoiceVersion,
+    OpNetworkPayloadEnvelope,
+    L2BlockInfo,
+);
+
+#[async_trait::async_trait]
+impl EngineTask for InsertTask {
+    type Error = InsertTaskError;
+    type Input = Input;
+
+    async fn execute(&mut self, input: Self::Input) -> Result<(), Self::Error> {
+        let (client, config, genesis, version, envelope, block_info) = input;
+        self.exec(client, config, genesis, version, envelope, block_info).await
     }
 }

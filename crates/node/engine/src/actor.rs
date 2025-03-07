@@ -10,13 +10,14 @@
 
 use kona_genesis::RollupConfig;
 use kona_protocol::L2BlockInfo;
+use op_alloy_provider::ext::engine::OpEngineApi;
 use op_alloy_rpc_types_engine::OpNetworkPayloadEnvelope;
 use std::sync::Arc;
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use crate::{
-    EngineClient, EngineForkchoiceVersion, ForkchoiceTaskExt, ForkchoiceTaskOut, InsertTaskExt,
-    InsertTaskOut, SyncConfig, SyncStatus,
+    EngineForkchoiceVersion, ForkchoiceTaskExt, ForkchoiceTaskOut, InsertTaskExt, InsertTaskOut,
+    SyncConfig, SyncStatus,
 };
 
 /// A stub event from the consensus node to the engine actor.
@@ -43,9 +44,15 @@ pub enum EngineActorError {}
 
 /// The Engine Actor.
 #[derive(Debug)]
-pub struct EngineActor {
+pub struct EngineActor<N, T, E>
+where
+    N: alloy_network::Network,
+    E: OpEngineApi<N, T> + Clone + Send,
+{
+    /// Phantom data for the engine api.
+    _phantom: std::marker::PhantomData<(T, N)>,
     /// The internal engine client.
-    pub client: Arc<EngineClient>,
+    pub client: E,
     /// The sync status.
     pub sync_status: SyncStatus,
     /// The sync configuration.
@@ -63,10 +70,14 @@ pub struct EngineActor {
     pub insert_task: Option<InsertTaskExt>,
 }
 
-impl EngineActor {
+impl<N, T, E> EngineActor<N, T, E>
+where
+    N: alloy_network::Network,
+    E: OpEngineApi<N, T> + Clone + Send,
+{
     /// Creates a new engine actor.
     pub const fn new(
-        client: Arc<EngineClient>,
+        client: E,
         sync_status: SyncStatus,
         sync_config: Arc<SyncConfig>,
         rollup_config: Arc<RollupConfig>,
@@ -74,6 +85,7 @@ impl EngineActor {
         sender: Sender<EngineActorMessage>,
     ) -> Self {
         Self {
+            _phantom: std::marker::PhantomData,
             client,
             sync_status,
             sync_config,
@@ -130,15 +142,14 @@ impl EngineActor {
                     &self.rollup_config,
                     info.block_info.timestamp,
                 );
-                let input = (
+                self.insert_task = Some(InsertTaskExt::spawn(
                     self.client.clone(),
                     self.sync_config.clone(),
                     self.rollup_config.genesis.l2.hash,
                     version,
                     envelope,
                     info,
-                );
-                self.insert_task = Some(InsertTaskExt::spawn(input));
+                ));
             }
         }
         Ok(())

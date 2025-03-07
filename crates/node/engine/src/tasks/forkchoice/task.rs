@@ -1,15 +1,12 @@
 //! A task for the `engine_forkchoiceUpdated` query.
 
+use alloy_provider::ext::EngineApi;
 use op_alloy_provider::ext::engine::OpEngineApi;
-use std::sync::Arc;
 
 use crate::{
     EngineClient, EngineState, EngineTask, ForkchoiceTaskError, ForkchoiceTaskInput,
     ForkchoiceTaskOut, SyncStatus,
 };
-
-/// The input type for the [ForkchoiceTask].
-type Input = Arc<EngineClient>;
 
 /// An external handle to communicate with a [ForkchoiceTask] spawned
 /// in a new thread.
@@ -27,11 +24,15 @@ impl ForkchoiceTaskExt {
     /// Spawns the [ForkchoiceTask] in a new thread, returning an
     /// external-facing wrapper that can be used to communicate with
     /// the spawned task.
-    pub fn spawn(input: Input) -> Self {
+    pub fn spawn<N, T, E>(client: E) -> Self
+    where
+        N: alloy_network::Network,
+        E: OpEngineApi<N, T> + EngineApi<N> + Clone + Send,
+    {
         let (sender, task_receiver) = tokio::sync::broadcast::channel(1);
         let (task_sender, receiver) = tokio::sync::broadcast::channel(1);
         let mut task = ForkchoiceTask::new(task_receiver, task_sender);
-        let handle = tokio::spawn(async move { task.execute(input).await });
+        let handle = tokio::spawn(async move { task.execute(client).await });
         Self { receiver, sender, handle }
     }
 }
@@ -78,14 +79,13 @@ impl ForkchoiceTask {
             Err(ForkchoiceTaskError::InvalidSyncStatusResponse)
         }
     }
-}
 
-#[async_trait::async_trait]
-impl EngineTask for ForkchoiceTask {
-    type Error = ForkchoiceTaskError;
-    type Input = Input;
-
-    async fn execute(&mut self, input: Self::Input) -> Result<(), Self::Error> {
+    /// Executes the forkchoice task.
+    async fn exec<N, T, E>(&mut self, client: E) -> Result<(), ForkchoiceTaskError>
+    where
+        N: alloy_network::Network,
+        E: OpEngineApi<N, T> + EngineApi<N> + Clone + Send,
+    {
         // Check if a forkchoice update is not needed, return early.
         let state = self.fetch_state().await?;
         if !state.forkchoice_update_needed {
@@ -109,8 +109,7 @@ impl EngineTask for ForkchoiceTask {
 
         // Send the forkchoice update through the input.
         let forkchoice = state.create_forkchoice_state();
-        let update = input
-            .fork_choice_updated_v3(forkchoice, None)
+        let update = <E as OpEngineApi<N, T>>::fork_choice_updated_v3(&client, forkchoice, None)
             .await
             .map_err(|_| ForkchoiceTaskError::ForkchoiceUpdateFailed)?;
 
@@ -125,5 +124,15 @@ impl EngineTask for ForkchoiceTask {
         crate::send_until_success!("fcu", self.sender, ForkchoiceTaskOut::ForkchoiceNotNeeded);
 
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl EngineTask for ForkchoiceTask {
+    type Error = ForkchoiceTaskError;
+    type Input = EngineClient;
+
+    async fn execute(&mut self, client: Self::Input) -> Result<(), Self::Error> {
+        self.exec(client).await
     }
 }
