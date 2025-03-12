@@ -122,6 +122,14 @@ impl SingleBatch {
             return BatchValidity::Drop;
         }
 
+        // Future forks that contain upgrade transactions must be added here.
+        let contains_txs = self.transactions.iter().any(|tx| !tx.is_empty());
+        let isthmus_act_block = cfg.is_isthmus_activation_block(self.timestamp);
+        let interop_act_block = cfg.is_interop_activation_block(self.timestamp);
+        if contains_txs && (isthmus_act_block || interop_act_block) {
+            return BatchValidity::Drop;
+        }
+
         // Check if we ran out of sequencer time drift
         let max_drift = cfg.max_sequencer_drift(batch_origin.timestamp);
         let max = if let Some(max) = batch_origin.timestamp.checked_add(max_drift) {
@@ -463,6 +471,82 @@ mod tests {
         assert_eq!(
             single_batch.check_batch(&cfg, &l1_blocks, l2_safe_head, &inclusion_block),
             BatchValidity::Drop
+        );
+    }
+
+    #[test]
+    fn test_check_batch_activation_block_dropped_isthmus() {
+        // Use the example transaction
+        let mut transactions = example_transactions();
+
+        // Extend the transactions with the 7702 transaction
+        let eip_7702_tx = eip_7702_tx();
+        let sig = PrimitiveSignature::test_signature();
+        let tx_signed = eip_7702_tx.into_signed(sig);
+        let envelope: TxEnvelope = tx_signed.into();
+        let encoded = envelope.encoded_2718();
+        transactions.push(encoded.into());
+
+        // Construct a basic `SingleBatch`
+        let parent_hash = BlockHash::ZERO;
+        let epoch_num = 1;
+        let epoch_hash = BlockHash::ZERO;
+        let timestamp = 2;
+
+        let single_batch =
+            SingleBatch { parent_hash, epoch_num, epoch_hash, timestamp, transactions };
+
+        // Notice: Isthmus is active.
+        let cfg = RollupConfig {
+            max_sequencer_drift: 1,
+            block_time: 1,
+            hardforks: HardForkConfig { isthmus_time: Some(1), ..Default::default() },
+            ..Default::default()
+        };
+        let l1_blocks = vec![BlockInfo::default(), BlockInfo::default()];
+        let l2_safe_head = L2BlockInfo {
+            block_info: BlockInfo { timestamp: 1, ..Default::default() },
+            ..Default::default()
+        };
+        let inclusion_block = BlockInfo::default();
+        assert_eq!(
+            single_batch.check_batch(&cfg, &l1_blocks, l2_safe_head, &inclusion_block),
+            BatchValidity::Drop
+        );
+    }
+
+    #[test]
+    fn test_check_batch_valid_activation_block_isthmus() {
+        // Construct a basic `SingleBatch`
+        let parent_hash = BlockHash::ZERO;
+        let epoch_num = 1;
+        let epoch_hash = BlockHash::ZERO;
+        let timestamp = 2;
+
+        let single_batch = SingleBatch {
+            parent_hash,
+            epoch_num,
+            epoch_hash,
+            timestamp,
+            transactions: Default::default(),
+        };
+
+        // Notice: Isthmus is active.
+        let cfg = RollupConfig {
+            max_sequencer_drift: 2,
+            block_time: 1,
+            hardforks: HardForkConfig { isthmus_time: Some(1), ..Default::default() },
+            ..Default::default()
+        };
+        let l1_blocks = vec![BlockInfo::default(), BlockInfo::default()];
+        let l2_safe_head = L2BlockInfo {
+            block_info: BlockInfo { timestamp: 1, ..Default::default() },
+            ..Default::default()
+        };
+        let inclusion_block = BlockInfo::default();
+        assert_eq!(
+            single_batch.check_batch(&cfg, &l1_blocks, l2_safe_head, &inclusion_block),
+            BatchValidity::Accept
         );
     }
 

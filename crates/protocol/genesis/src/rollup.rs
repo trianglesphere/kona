@@ -251,6 +251,20 @@ impl RollupConfig {
         self.da_challenge_address.is_some_and(|addr| !addr.is_zero())
     }
 
+    /// Returns true if the specified block is the first block subject to the Isthmus upgrade.
+    pub fn is_isthmus_activation_block(&self, l2_block_time: u64) -> bool {
+        self.is_isthmus_active(l2_block_time) &&
+            l2_block_time >= self.block_time &&
+            !self.is_isthmus_active(l2_block_time - self.block_time)
+    }
+
+    /// Returns true if the specified block is the first block subject to the Interop upgrade.
+    pub fn is_interop_activation_block(&self, l2_block_time: u64) -> bool {
+        self.is_interop_active(l2_block_time) &&
+            l2_block_time >= self.block_time &&
+            !self.is_interop_active(l2_block_time - self.block_time)
+    }
+
     /// Returns the max sequencer drift for the given timestamp.
     pub fn max_sequencer_drift(&self, timestamp: u64) -> u64 {
         if self.is_fjord_active(timestamp) {

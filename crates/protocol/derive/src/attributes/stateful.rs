@@ -13,7 +13,7 @@ use alloy_rlp::Encodable;
 use alloy_rpc_types_engine::PayloadAttributes;
 use async_trait::async_trait;
 use kona_genesis::RollupConfig;
-use kona_hardforks::{Hardfork, Hardforks};
+use kona_hardforks::{Hardfork, Hardforks, Isthmus};
 use kona_protocol::{
     DEPOSIT_EVENT_ABI_HASH, L1BlockInfoTx, L2BlockInfo, closing_deposit_context_tx, decode_deposit,
 };
@@ -130,6 +130,9 @@ where
             ));
         }
 
+        let mut upgrade_gas =
+            u64::from_be_bytes(alloy_primitives::U64::from(sys_config.gas_limit).to_be_bytes());
+
         let mut upgrade_transactions: Vec<Bytes> = vec![];
         if self.rollup_cfg.is_ecotone_active(next_l2_time) &&
             !self.rollup_cfg.is_ecotone_active(l2_parent.block_info.timestamp)
@@ -144,6 +147,7 @@ where
         if self.rollup_cfg.is_isthmus_active(next_l2_time) &&
             !self.rollup_cfg.is_isthmus_active(l2_parent.block_info.timestamp)
         {
+            upgrade_gas += Isthmus::deposits().map(|tx| tx.gas_limit).sum::<u64>();
             upgrade_transactions.append(&mut Hardforks::ISTHMUS.txs().collect());
         }
 
@@ -197,9 +201,7 @@ where
             },
             transactions: Some(txs),
             no_tx_pool: Some(true),
-            gas_limit: Some(u64::from_be_bytes(
-                alloy_primitives::U64::from(sys_config.gas_limit).to_be_bytes(),
-            )),
+            gas_limit: Some(upgrade_gas),
             eip_1559_params: sys_config.eip_1559_params(
                 &self.rollup_cfg,
                 l2_parent.block_info.timestamp,
@@ -250,7 +252,7 @@ mod tests {
     };
     use alloc::vec;
     use alloy_consensus::Header;
-    use alloy_primitives::{B256, Log, LogData, U64, U256};
+    use alloy_primitives::{B64, B256, Log, LogData, U64, U256};
     use kona_genesis::{HardForkConfig, SystemConfig};
     use kona_protocol::{BlockInfo, DepositError};
 
@@ -626,6 +628,57 @@ mod tests {
             eip_1559_params: None,
         };
         assert_eq!(payload.transactions.as_ref().unwrap().len(), 10);
+        assert_eq!(payload, expected);
+    }
+
+    #[tokio::test]
+    async fn test_prepare_payload_with_isthmus() {
+        let block_time = 2;
+        let timestamp = 100;
+        let cfg = Arc::new(RollupConfig {
+            block_time,
+            hardforks: HardForkConfig { isthmus_time: Some(102), ..Default::default() },
+            ..Default::default()
+        });
+        let l2_number = 1;
+        let mut fetcher = TestSystemConfigL2Fetcher::default();
+        fetcher.insert(l2_number, SystemConfig::default());
+        let mut provider = TestChainProvider::default();
+        let header = Header { timestamp, ..Default::default() };
+        let prev_randao = header.mix_hash;
+        let hash = header.hash_slow();
+        provider.insert_header(hash, header);
+        let mut builder = StatefulAttributesBuilder::new(cfg, fetcher, provider);
+        let epoch = BlockNumHash { hash, number: l2_number };
+        let l2_parent = L2BlockInfo {
+            block_info: BlockInfo {
+                hash: B256::ZERO,
+                number: l2_number,
+                timestamp,
+                parent_hash: hash,
+            },
+            l1_origin: BlockNumHash { hash, number: l2_number },
+            seq_num: 0,
+        };
+        let next_l2_time = l2_parent.block_info.timestamp + block_time;
+        let payload = builder.prepare_payload_attributes(l2_parent, epoch).await.unwrap();
+        let gas_limit = u64::from_be_bytes(
+            alloy_primitives::U64::from(SystemConfig::default().gas_limit).to_be_bytes(),
+        ) + 3040000;
+        let expected = OpPayloadAttributes {
+            payload_attributes: PayloadAttributes {
+                timestamp: next_l2_time,
+                prev_randao,
+                suggested_fee_recipient: SEQUENCER_FEE_VAULT_ADDRESS,
+                parent_beacon_block_root: Some(B256::ZERO),
+                withdrawals: Some(vec![]),
+            },
+            transactions: payload.transactions.clone(),
+            no_tx_pool: Some(true),
+            gas_limit: Some(gas_limit),
+            eip_1559_params: Some(B64::ZERO),
+        };
+        assert_eq!(payload.transactions.as_ref().unwrap().len(), 18);
         assert_eq!(payload, expected);
     }
 }
