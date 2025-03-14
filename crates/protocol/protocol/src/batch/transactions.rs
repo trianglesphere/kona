@@ -256,6 +256,10 @@ impl SpanBatchTransactions {
                 to_idx += 1;
                 Some(self.tx_tos[to_idx - 1])
             } else {
+                if matches!(tx, SpanBatchTransactionData::Eip7702(_)) {
+                    return Err(SpanBatchError::Decoding(SpanDecodingError::InvalidTransactionData));
+                }
+
                 None
             };
             let sig = *self
@@ -311,7 +315,7 @@ impl SpanBatchTransactions {
                     (sig, tx.to(), tx.nonce(), tx.gas_limit(), tx.chain_id())
                 }
                 _ => {
-                    return Err(SpanBatchError::Decoding(SpanDecodingError::InvalidTransactionData))
+                    return Err(SpanBatchError::Decoding(SpanDecodingError::InvalidTransactionData));
                 }
             };
 
