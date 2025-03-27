@@ -19,7 +19,7 @@ kona-genesis.workspace = true
 kona-derive.workspace = true
 kona-protocol.workspace = true
 kona-providers-alloy.workspace = true
-kona-rpc.workspace = true
+kona-rpc = { workspace = true, features = ["std"] }
 
 # alloy
 alloy-primitives.workspace = true
@@ -33,11 +33,12 @@ op-alloy-network.workspace = true
 op-alloy-rpc-types-engine = { workspace = true, features = ["std"] }
 
 # general
-libp2p.workspace = true
 url.workspace = true
-thiserror.workspace = true
-async-trait.workspace = true
-tracing.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
-tokio-util.workspace = true
+libp2p.workspace = true
 futures.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+async-trait.workspace = true
+jsonrpsee = { workspace = true, features = ["server"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
