@@ -1,4 +1,4 @@
-//! P2P CLI Flags
+//! Network CLI Flags
 //!
 //! These are based on p2p flags from the [`op-node`][op-node] CLI.
 //!
@@ -10,9 +10,9 @@ use clap::Parser;
 use libp2p::identity::Keypair;
 use std::{net::IpAddr, path::PathBuf};
 
-/// P2P CLI Flags
+/// Network CLI Flags
 #[derive(Parser, Clone, Debug, PartialEq, Eq)]
-pub struct P2PArgs {
+pub struct NetArgs {
     /// Whether to disable the entire P2P stack.
     #[arg(
         long = "p2p.disable",
@@ -69,7 +69,7 @@ pub struct P2PArgs {
     pub listen_udp_port: u16,
 }
 
-impl Default for P2PArgs {
+impl Default for NetArgs {
     fn default() -> Self {
         Self {
             disabled: false,
@@ -83,8 +83,8 @@ impl Default for P2PArgs {
     }
 }
 
-impl P2PArgs {
-    /// Returns the [Keypair] from the cli inputs.
+impl NetArgs {
+    /// Returns the [`Keypair`] from the cli inputs.
     ///
     /// If the raw private key is empty and the specified file is empty,
     /// this method will generate a new private key and write it out to the file.
@@ -111,33 +111,33 @@ mod tests {
     use alloy_primitives::b256;
     use clap::Parser;
 
-    /// A mock command that uses the P2PArgs.
+    /// A mock command that uses the [`NetArgs`].
     #[derive(Parser, Debug, Clone)]
     #[command(about = "Mock command")]
     pub struct MockCommand {
-        /// P2P CLI Flags
+        /// Network CLI Flags
         #[clap(flatten)]
-        pub p2p: P2PArgs,
+        pub inner: NetArgs,
     }
 
     #[test]
-    fn test_p2p_args_keypair_missing_both() {
+    fn test_net_args_keypair_missing_both() {
         let args = MockCommand::parse_from(["test"]);
-        assert!(args.p2p.keypair().is_err());
+        assert!(args.inner.keypair().is_err());
     }
 
     #[test]
-    fn test_p2p_args_keypair_raw_private_key() {
+    fn test_net_args_keypair_raw_private_key() {
         let args = MockCommand::parse_from([
             "test",
             "--p2p.priv.raw",
             "1d2b0bda21d56b8bd12d4f94ebacffdfb35f5e226f84b461103bb8beab6353be",
         ]);
-        assert!(args.p2p.keypair().is_ok());
+        assert!(args.inner.keypair().is_ok());
     }
 
     #[test]
-    fn test_p2p_args_keypair_from_path() {
+    fn test_net_args_keypair_from_path() {
         // Create a temporary directory.
         let dir = std::env::temp_dir();
         let mut source_path = dir.clone();
@@ -152,60 +152,60 @@ mod tests {
         // Parse the keypair from the file.
         let args =
             MockCommand::parse_from(["test", "--p2p.priv.path", source_path.to_str().unwrap()]);
-        assert!(args.p2p.keypair().is_ok());
+        assert!(args.inner.keypair().is_ok());
     }
 
     #[test]
-    fn test_p2p_args() {
+    fn test_net_args() {
         let args = MockCommand::parse_from(["test"]);
-        assert_eq!(args.p2p, P2PArgs::default());
+        assert_eq!(args.inner, NetArgs::default());
     }
 
     #[test]
-    fn test_p2p_args_disabled() {
+    fn test_net_args_disabled() {
         let args = MockCommand::parse_from(["test", "--p2p.disable"]);
-        assert!(args.p2p.disabled);
+        assert!(args.inner.disabled);
     }
 
     #[test]
-    fn test_p2p_args_no_discovery() {
+    fn test_net_args_no_discovery() {
         let args = MockCommand::parse_from(["test", "--p2p.no-discovery"]);
-        assert!(args.p2p.no_discovery);
+        assert!(args.inner.no_discovery);
     }
 
     #[test]
-    fn test_p2p_args_priv_path() {
+    fn test_net_args_priv_path() {
         let args = MockCommand::parse_from(["test", "--p2p.priv.path", "test.txt"]);
-        assert_eq!(args.p2p.priv_path, Some(PathBuf::from("test.txt")));
+        assert_eq!(args.inner.priv_path, Some(PathBuf::from("test.txt")));
     }
 
     #[test]
-    fn test_p2p_args_private_key() {
+    fn test_net_args_private_key() {
         let args = MockCommand::parse_from([
             "test",
             "--p2p.priv.raw",
             "1d2b0bda21d56b8bd12d4f94ebacffdfb35f5e226f84b461103bb8beab6353be",
         ]);
         let key = b256!("1d2b0bda21d56b8bd12d4f94ebacffdfb35f5e226f84b461103bb8beab6353be");
-        assert_eq!(args.p2p.private_key, Some(key));
+        assert_eq!(args.inner.private_key, Some(key));
     }
 
     #[test]
-    fn test_p2p_args_listen_ip() {
+    fn test_net_args_listen_ip() {
         let args = MockCommand::parse_from(["test", "--p2p.listen.ip", "127.0.0.1"]);
         let expected: IpAddr = "127.0.0.1".parse().unwrap();
-        assert_eq!(args.p2p.listen_ip, expected);
+        assert_eq!(args.inner.listen_ip, expected);
     }
 
     #[test]
-    fn test_p2p_args_listen_tcp_port() {
+    fn test_net_args_listen_tcp_port() {
         let args = MockCommand::parse_from(["test", "--p2p.listen.tcp", "1234"]);
-        assert_eq!(args.p2p.listen_tcp_port, 1234);
+        assert_eq!(args.inner.listen_tcp_port, 1234);
     }
 
     #[test]
-    fn test_p2p_args_listen_udp_port() {
+    fn test_net_args_listen_udp_port() {
         let args = MockCommand::parse_from(["test", "--p2p.listen.udp", "1234"]);
-        assert_eq!(args.p2p.listen_udp_port, 1234);
+        assert_eq!(args.inner.listen_udp_port, 1234);
     }
 }

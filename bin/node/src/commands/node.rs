@@ -14,7 +14,7 @@ use std::{fs::File, net::SocketAddr, path::PathBuf};
 use tracing::debug;
 use url::Url;
 
-use crate::flags::{GlobalArgs, P2PArgs, RPCArgs};
+use crate::flags::{GlobalArgs, NetArgs, RpcArgs};
 
 /// The Node subcommand.
 ///
@@ -54,12 +54,12 @@ pub struct NodeCommand {
         help = "The kind of engine client, used to control the behavior of optimism in respect to different types of engine clients. Supported engine clients are: [\"geth\", \"reth\", \"erigon\"]."
     )]
     pub l2_engine_kind: EngineKind,
-    /// P2P CLI arguments.
+    /// Network CLI arguments.
     #[command(flatten)]
-    pub p2p_flags: P2PArgs,
-    /// RPC CLI arguments.
+    pub net_args: NetArgs,
+    /// Rpc CLI arguments.
     #[command(flatten)]
-    pub rpc_flags: RPCArgs,
+    pub rpc_args: RpcArgs,
 }
 
 impl NodeCommand {
@@ -94,15 +94,15 @@ impl NodeCommand {
 
     /// Returns the [`NetConfig`] from the [`NodeCommand`].
     pub fn net_config(&self, args: &GlobalArgs) -> anyhow::Result<NetConfig> {
-        let mut multiaddr = libp2p::Multiaddr::from(self.p2p_flags.listen_ip);
-        multiaddr.push(libp2p::multiaddr::Protocol::Tcp(self.p2p_flags.listen_tcp_port));
+        let mut multiaddr = libp2p::Multiaddr::from(self.net_args.listen_ip);
+        multiaddr.push(libp2p::multiaddr::Protocol::Tcp(self.net_args.listen_tcp_port));
         Ok(NetConfig {
             discovery_address: SocketAddr::new(
-                self.p2p_flags.listen_ip,
-                self.p2p_flags.listen_udp_port,
+                self.net_args.listen_ip,
+                self.net_args.listen_udp_port,
             ),
             gossip_address: multiaddr,
-            keypair: self.p2p_flags.keypair().unwrap_or_else(|_| Keypair::generate_secp256k1()),
+            keypair: self.net_args.keypair().unwrap_or_else(|_| Keypair::generate_secp256k1()),
             unsafe_block_signer: args.genesis_signer()?,
         })
     }

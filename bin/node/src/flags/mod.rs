@@ -3,8 +3,8 @@
 mod globals;
 pub use globals::GlobalArgs;
 
-mod p2p;
-pub use p2p::P2PArgs;
+mod net;
+pub use net::NetArgs;
 
 mod rpc;
-pub use rpc::RPCArgs;
+pub use rpc::RpcArgs;
