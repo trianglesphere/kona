@@ -27,6 +27,16 @@ pub struct NetCommand {
 }
 
 impl NetCommand {
+    /// Initializes the telemetry stack and Prometheus metrics recorder.
+    pub fn init_telemetry(&self, args: &GlobalArgs) -> anyhow::Result<()> {
+        // Filter out discovery warnings since they're very very noisy.
+        let filter = tracing_subscriber::EnvFilter::from_default_env()
+            .add_directive("discv5=error".parse()?);
+
+        // Initialize the telemetry stack.
+        args.init_telemetry(Some(filter))
+    }
+
     /// Run the Net subcommand.
     pub async fn run(self, args: &GlobalArgs) -> anyhow::Result<()> {
         let signer = args.genesis_signer()?;
@@ -40,14 +50,19 @@ impl NetCommand {
         let handle = launcher.start().await?;
         info!("Started RPC server on {:?}:{}", rpc_config.listen_addr, rpc_config.listen_port);
 
+        // Get the rollup config from the args
+        let rollup_config = args
+            .rollup_config()
+            .ok_or(anyhow::anyhow!("Rollug config not found for chain id: {}", args.l2_chain_id))?;
+
         // Start the Network Stack
         let p2p_config = self.p2p.config(args)?;
         let mut network = NetworkBuilder::from(p2p_config)
             .with_chain_id(args.l2_chain_id)
             .with_rpc_receiver(rx)
+            .with_rollup_config(rollup_config)
             .build()?;
-        let mut recv =
-            network.take_unsafe_block_recv().ok_or(anyhow::anyhow!("No unsafe block receiver"))?;
+        let mut recv = network.unsafe_block_recv();
         network.start()?;
         info!("Network started, receiving blocks.");
 
@@ -56,10 +71,10 @@ impl NetCommand {
 
         loop {
             tokio::select! {
-                block = recv.recv() => {
-                    match block {
-                        Some(block) => info!("Received unsafe block: {:?}", block),
-                        None => debug!("Failed to receive unsafe block"),
+                payload = recv.recv() => {
+                    match payload {
+                        Ok(payload) => info!("Received unsafe payload: {:?}", payload.payload_hash),
+                        Err(e) => debug!("Failed to receive unsafe payload: {:?}", e),
                     }
                 }
                 _ = interval.tick() => {

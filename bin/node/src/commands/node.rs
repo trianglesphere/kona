@@ -6,7 +6,6 @@ use clap::Parser;
 use kona_engine::{EngineKind, SyncConfig, SyncMode};
 use kona_genesis::RollupConfig;
 use kona_node_service::{RollupNode, RollupNodeService};
-use kona_registry::ROLLUP_CONFIGS;
 use serde_json::from_reader;
 use std::{fs::File, path::PathBuf};
 use tracing::debug;
@@ -61,6 +60,11 @@ pub struct NodeCommand {
 }
 
 impl NodeCommand {
+    /// Initializes the telemetry stack and Prometheus metrics recorder.
+    pub fn init_telemetry(&self, args: &GlobalArgs) -> anyhow::Result<()> {
+        args.init_telemetry(None)
+    }
+
     /// Run the Node subcommand.
     pub async fn run(self, args: &GlobalArgs) -> anyhow::Result<()> {
         let cfg = self.get_l2_config(args)?;
@@ -103,7 +107,7 @@ impl NodeCommand {
             }
             None => {
                 debug!("Loading l2 config from superchain registry");
-                let Some(cfg) = ROLLUP_CONFIGS.get(&args.l2_chain_id).cloned() else {
+                let Some(cfg) = args.rollup_config() else {
                     bail!("Failed to find l2 config for chain ID {}", args.l2_chain_id);
                 };
                 Ok(cfg)

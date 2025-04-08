@@ -3,12 +3,17 @@
 use derive_more::Debug;
 use discv5::Enr;
 use futures::stream::StreamExt;
-use libp2p::{Multiaddr, Swarm, TransportError, swarm::SwarmEvent};
+use libp2p::{
+    Multiaddr, PeerId, Swarm, TransportError,
+    gossipsub::{IdentTopic, MessageId},
+    swarm::SwarmEvent,
+};
 use op_alloy_rpc_types_engine::OpNetworkPayloadEnvelope;
-use tokio::sync::mpsc::Receiver;
+use std::collections::HashMap;
 
 use crate::{
-    Behaviour, BlockHandler, Event, GossipDriverBuilder, Handler, OpStackEnr, enr_to_multiaddr,
+    Behaviour, BlockHandler, Event, GossipDriverBuilder, Handler, OpStackEnr, PublishError,
+    enr_to_multiaddr,
 };
 
 /// A driver for a [`Swarm`] instance.
@@ -24,11 +29,10 @@ pub struct GossipDriver {
     pub addr: Multiaddr,
     /// The [`BlockHandler`].
     pub handler: BlockHandler,
-    /// A receiver for unsafe payloads.
-    /// This is expected to be consumed and listened to by the consumer.
-    pub payload_receiver: Option<Receiver<OpNetworkPayloadEnvelope>>,
     /// A list of peers we have successfully dialed.
-    pub dialed_peers: Vec<Multiaddr>,
+    pub dialed_peers: HashMap<Multiaddr, bool>,
+    /// A mapping from [`PeerId`] to [`Multiaddr`].
+    pub peerstore: HashMap<PeerId, Multiaddr>,
 }
 
 impl GossipDriver {
@@ -39,21 +43,41 @@ impl GossipDriver {
 
     /// Creates a new [`GossipDriver`] instance.
     pub fn new(swarm: Swarm<Behaviour>, addr: Multiaddr, handler: BlockHandler) -> Self {
-        Self { swarm, addr, handler, payload_receiver: None, dialed_peers: Vec::new() }
+        Self {
+            swarm,
+            addr,
+            handler,
+            dialed_peers: Default::default(),
+            peerstore: Default::default(),
+        }
     }
 
-    /// Sets the payload receiver on the [`GossipDriver`].
-    pub fn set_payload_receiver(
+    /// Publishes an unsafe block to gossip.
+    ///
+    /// ## Arguments
+    ///
+    /// * `topic_selector` - A function that selects the topic for the block. This is expected to be
+    ///   a closure that takes the [`BlockHandler`] and returns the [`IdentTopic`] for the block.
+    /// * `payload` - The payload to be published.
+    ///
+    /// ## Returns
+    ///
+    /// Returns the [`MessageId`] of the published message or a [`PublishError`]
+    /// if the message could not be published.
+    pub fn publish(
         &mut self,
-        unsafe_payload_recv: Receiver<OpNetworkPayloadEnvelope>,
-    ) -> &mut Self {
-        self.payload_receiver = Some(unsafe_payload_recv);
-        self
-    }
-
-    /// Takes the [`Receiver`] for [`OpNetworkPayloadEnvelope`].
-    pub fn take_payload_recv(&mut self) -> Option<Receiver<OpNetworkPayloadEnvelope>> {
-        self.payload_receiver.take()
+        selector: impl FnOnce(&BlockHandler) -> IdentTopic,
+        payload: Option<OpNetworkPayloadEnvelope>,
+    ) -> Result<Option<MessageId>, PublishError> {
+        let Some(payload) = payload else {
+            debug!("Ignoring empty payload");
+            return Ok(None);
+        };
+        let topic = selector(&self.handler);
+        let topic_hash = topic.hash();
+        let data = self.handler.encode(topic, payload)?;
+        let id = self.swarm.behaviour_mut().gossipsub.publish(topic_hash, data)?;
+        Ok(Some(id))
     }
 
     /// Listens on the address.
@@ -80,7 +104,7 @@ impl GossipDriver {
 
     /// Returns if the swarm has already successfully dialed the given [`Multiaddr`].
     pub fn has_dialed(&mut self, addr: &Multiaddr) -> bool {
-        self.dialed_peers.contains(addr)
+        self.dialed_peers.get(addr).copied().unwrap_or(false)
     }
 
     /// Returns the number of connected peers.
@@ -112,7 +136,7 @@ impl GossipDriver {
         match self.swarm.dial(addr.clone()) {
             Ok(_) => {
                 event!(tracing::Level::TRACE, peer=%addr, "Dialed peer");
-                self.dialed_peers.push(addr);
+                self.dialed_peers.insert(addr, true);
             }
             Err(e) => {
                 debug!("Failed to connect to peer: {:?}", e);
@@ -121,7 +145,10 @@ impl GossipDriver {
     }
 
     /// Handles a [`libp2p::gossipsub::Event`].
-    fn handle_gossipsub_event(&mut self, event: libp2p::gossipsub::Event) {
+    fn handle_gossipsub_event(
+        &mut self,
+        event: libp2p::gossipsub::Event,
+    ) -> Option<OpNetworkPayloadEnvelope> {
         match event {
             libp2p::gossipsub::Event::Message {
                 propagation_source: src,
@@ -130,12 +157,13 @@ impl GossipDriver {
             } => {
                 debug!("Received message with topic: {}", message.topic);
                 if self.handler.topics().contains(&message.topic) {
-                    let status = self.handler.handle(message);
+                    let (status, payload) = self.handler.handle(message);
                     _ = self
                         .swarm
                         .behaviour_mut()
                         .gossipsub
                         .report_message_validation_result(&id, &src, status);
+                    return payload;
                 }
             }
             libp2p::gossipsub::Event::Subscribed { peer_id, topic } => {
@@ -150,18 +178,45 @@ impl GossipDriver {
                 debug!("Ignoring non-message gossipsub event: {:?}", event)
             }
         }
+        None
+    }
+
+    /// Redials the given [`PeerId`] using the peerstore.
+    pub fn redial(&mut self, peer_id: PeerId) {
+        if let Some(addr) = self.peerstore.get(&peer_id) {
+            self.dialed_peers.remove(addr);
+            trace!("Redialing peer with id: {:?}", peer_id);
+            self.dial_multiaddr(addr.clone());
+        }
     }
 
     /// Handles the [`SwarmEvent<Event>`].
-    pub fn handle_event(&mut self, event: SwarmEvent<Event>) {
+    pub fn handle_event(&mut self, event: SwarmEvent<Event>) -> Option<OpNetworkPayloadEnvelope> {
+        if let SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } = event {
+            self.peerstore.insert(peer_id, endpoint.get_remote_address().clone());
+            return None;
+        }
+        if let SwarmEvent::OutgoingConnectionError { peer_id, error, .. } = event {
+            trace!("Outgoing connection error: {:?}", error);
+            if let Some(id) = peer_id {
+                self.redial(id);
+            }
+            return None;
+        }
+        if let SwarmEvent::ConnectionClosed { peer_id, cause, .. } = event {
+            trace!("Connection closed, redialing peer: {:?} | {:?}", peer_id, cause);
+            self.redial(peer_id);
+            return None;
+        }
         let SwarmEvent::Behaviour(event) = event else {
-            debug!("Ignoring non-behaviour in event handler: {:?}", event);
-            return;
+            trace!("Ignoring non-behaviour in event handler: {:?}", event);
+            return None;
         };
 
         match event {
             Event::Ping(libp2p::ping::Event { peer, result, .. }) => {
                 trace!("Ping from peer: {:?} | Result: {:?}", peer, result);
+                None
             }
             Event::Gossipsub(e) => self.handle_gossipsub_event(e),
         }

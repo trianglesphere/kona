@@ -1,11 +1,16 @@
 //! Driver for network services.
 
 use alloy_primitives::Address;
+use kona_genesis::RollupConfig;
 use libp2p::TransportError;
 use op_alloy_rpc_types_engine::OpNetworkPayloadEnvelope;
+use std::collections::VecDeque;
 use tokio::{
     select,
-    sync::{mpsc::Receiver, watch::Sender},
+    sync::{
+        broadcast::{Receiver as BroadcastReceiver, Sender as BroadcastSender},
+        watch::Sender,
+    },
 };
 
 use crate::{Discv5Driver, GossipDriver, NetRpcRequest, NetworkBuilder};
@@ -18,8 +23,8 @@ use crate::{Discv5Driver, GossipDriver, NetRpcRequest, NetworkBuilder};
 /// - Peer discovery with `discv5`.
 #[derive(Debug)]
 pub struct Network {
-    /// Channel to receive unsafe blocks.
-    pub(crate) unsafe_block_recv: Option<Receiver<OpNetworkPayloadEnvelope>>,
+    /// Channel to send unsafe blocks.
+    pub(crate) payload_tx: BroadcastSender<OpNetworkPayloadEnvelope>,
     /// Channel to send unsafe signer updates.
     pub(crate) unsafe_block_signer_sender: Option<Sender<Address>>,
     /// Handler for RPC Requests.
@@ -27,6 +32,10 @@ pub struct Network {
     /// This is allowed to be optional since it may not be desirable
     /// run a networking stack with RPC access.
     pub(crate) rpc: Option<tokio::sync::mpsc::Receiver<NetRpcRequest>>,
+    /// A channel to publish an unsafe block.
+    pub(crate) publish_rx: Option<tokio::sync::mpsc::Receiver<OpNetworkPayloadEnvelope>>,
+    /// Optional [`RollupConfig`] used for selecting the topic to publish to.
+    pub(crate) cfg: Option<RollupConfig>,
     /// The swarm instance.
     pub gossip: GossipDriver,
     /// The discovery service driver.
@@ -40,8 +49,8 @@ impl Network {
     }
 
     /// Take the unsafe block receiver.
-    pub fn take_unsafe_block_recv(&mut self) -> Option<Receiver<OpNetworkPayloadEnvelope>> {
-        self.unsafe_block_recv.take()
+    pub fn unsafe_block_recv(&mut self) -> BroadcastReceiver<OpNetworkPayloadEnvelope> {
+        self.payload_tx.subscribe()
     }
 
     /// Take the unsafe block signer sender.
@@ -53,25 +62,57 @@ impl Network {
     /// and continually listens for new peers and messages to handle
     pub fn start(mut self) -> Result<(), TransportError<std::io::Error>> {
         let mut rpc = self.rpc.unwrap_or_else(|| tokio::sync::mpsc::channel(1).1);
+        let mut publish = self.publish_rx.unwrap_or_else(|| tokio::sync::mpsc::channel(1).1);
         let mut handler = self.discovery.start();
         self.gossip.listen()?;
         tokio::spawn(async move {
+            // A vec deque that holds unsafe blocks to be sent over the channel.
+            let mut unsafe_blocks = VecDeque::<OpNetworkPayloadEnvelope>::new();
             loop {
+                // Attempt to send the unsafe blocks over the channel **in order**.
+                loop {
+                    if unsafe_blocks.is_empty() {
+                        break;
+                    }
+                    if let Some(block) = unsafe_blocks.front() {
+                        if let Err(e) = self.payload_tx.send(block.clone()) {
+                            trace!("Failed to send unsafe block through channel: {:?}", e);
+                            break;
+                        }
+                        unsafe_blocks.pop_front();
+                    }
+                }
                 select! {
-                    event = self.gossip.select_next_some() => {
-                        trace!(target: "p2p::driver", "Received event: {:?}", event);
-                        self.gossip.handle_event(event);
-                    },
-                    enr = handler.enr_receiver.recv() => {
-                        let Some(ref enr) = enr else {
-                            trace!(target: "p2p::driver", "Receiver `None` peer enr");
+                    block = publish.recv() => {
+                        let Some(block) = block else {
+                            trace!(target: "p2p::driver", "Receiver `None` unsafe block");
                             continue;
                         };
-                        self.gossip.dial(enr.clone());
+                        let timestamp = block.payload.timestamp();
+                        let selector = |handler: &crate::BlockHandler| {
+                            handler.topic(timestamp, self.cfg.as_ref())
+                        };
+                        match self.gossip.publish(selector, Some(block)) {
+                            Ok(id) => info!("Published unsafe payload | {:?}", id),
+                            Err(e) => warn!("Failed to publish unsafe payload: {:?}", e),
+                        }
+                    }
+                    event = self.gossip.select_next_some() => {
+                        trace!("Received event: {:?}", event);
+                        if let Some(payload) = self.gossip.handle_event(event) {
+                            unsafe_blocks.push_back(payload);
+                        }
+                    },
+                    enr = handler.enr_receiver.recv() => {
+                        let Some(enr) = enr else {
+                            trace!("Receiver `None` peer enr");
+                            continue;
+                        };
+                        self.gossip.dial(enr);
                     },
                     req = rpc.recv() => {
                         let Some(req) = req else {
-                            trace!(target: "p2p::driver", "Receiver `None` rpc request");
+                            trace!("Receiver `None` rpc request");
                             continue;
                         };
                         match req {
