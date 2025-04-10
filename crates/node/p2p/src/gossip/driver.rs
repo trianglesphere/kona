@@ -25,6 +25,8 @@ pub struct GossipDriver {
     /// The [`Swarm`] instance.
     #[debug(skip)]
     pub swarm: Swarm<Behaviour>,
+    /// The chain id to use.
+    pub chain_id: u64,
     /// A [`Multiaddr`] to listen on.
     pub addr: Multiaddr,
     /// The [`BlockHandler`].
@@ -45,9 +47,15 @@ impl GossipDriver {
     }
 
     /// Creates a new [`GossipDriver`] instance.
-    pub fn new(swarm: Swarm<Behaviour>, addr: Multiaddr, handler: BlockHandler) -> Self {
+    pub fn new(
+        swarm: Swarm<Behaviour>,
+        chain_id: u64,
+        addr: Multiaddr,
+        handler: BlockHandler,
+    ) -> Self {
         Self {
             swarm,
+            chain_id,
             addr,
             handler,
             dialed_peers: Default::default(),

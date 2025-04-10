@@ -70,6 +70,11 @@ impl NetworkBuilder {
         self
     }
 
+    /// Sets the discovery interval.
+    pub fn with_discovery_interval(self, interval: Duration) -> Self {
+        Self { discovery: self.discovery.with_interval(interval), ..self }
+    }
+
     /// Sets the block time used by peer scoring.
     pub fn with_block_time(self, block_time: u64) -> Self {
         Self { gossip: self.gossip.with_block_time(block_time), ..self }
@@ -83,11 +88,6 @@ impl NetworkBuilder {
     /// Sets the peer monitoring for the [`crate::GossipDriver`].
     pub fn with_peer_monitoring(self, peer_monitoring: Option<PeerMonitoring>) -> Self {
         Self { gossip: self.gossip.with_peer_monitoring(peer_monitoring), ..self }
-    }
-
-    /// Sets the discovery interval for the [`crate::Discv5Driver`].
-    pub fn with_discovery_interval(self, interval: tokio::time::Duration) -> Self {
-        Self { discovery: self.discovery.with_interval(interval), ..self }
     }
 
     /// Sets the address for the [`crate::Discv5Driver`].

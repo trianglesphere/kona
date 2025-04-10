@@ -102,6 +102,22 @@ pub trait ValidatorNodeService {
         let da_watcher =
             Some(self.new_da_watcher(new_head_tx, block_signer_tx, cancellation.clone()));
 
+        let launcher = self.engine();
+        let client = launcher.client();
+        let sync = launcher.sync.clone();
+        let engine = launcher.launch().await?;
+        let mut engine = EngineActor::new(
+            std::sync::Arc::new(self.config().clone()),
+            sync,
+            client,
+            engine,
+            derived_payload_rx,
+            unsafe_block_rx,
+            cancellation.clone(),
+        );
+        engine.init_sync()?;
+        let engine = Some(engine);
+
         let (l2_forkchoice_state, derivation_pipeline) = self.init_derivation().await?;
         let derivation = DerivationActor::new(
             derivation_pipeline,
@@ -111,21 +127,6 @@ pub trait ValidatorNodeService {
             cancellation.clone(),
         );
         let derivation = Some(derivation);
-
-        let launcher = self.engine();
-        let client = launcher.client();
-        let sync = launcher.sync.clone();
-        let engine = launcher.launch().await?;
-        let engine = EngineActor::new(
-            std::sync::Arc::new(self.config().clone()),
-            sync,
-            client,
-            engine,
-            derived_payload_rx,
-            unsafe_block_rx,
-            cancellation.clone(),
-        );
-        let engine = Some(engine);
 
         let network = (self.init_network().await?).map_or_else(
             || None,

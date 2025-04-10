@@ -26,17 +26,18 @@ impl EngineTaskExt for ForkchoiceTask {
     async fn execute(&self, state: &mut EngineState) -> Result<(), EngineTaskError> {
         // Check if a forkchoice update is not needed, return early.
         if !state.forkchoice_update_needed {
+            info!(target: "engine", "Forkchoice task executed but no update needed");
             return Err(ForkchoiceTaskError::NoForkchoiceUpdateNeeded.into());
         }
 
-        // If the engine is syncing, log a warning. We can still attempt to apply the forkchoice
-        // update.
+        // If the engine is syncing, log a warning. Still attempt the forkchoice update.
         if state.sync_status.is_syncing() {
-            warn!(target: "engine", "Attempting to update forkchoice state while EL syncing");
+            trace!(target: "engine", "Attempting to update forkchoice state while EL syncing");
         }
 
         // Check if the head is behind the finalized head.
         if state.unsafe_head().block_info.number < state.finalized_head().block_info.number {
+            info!(target: "engine", "Unsafe head is behind finalized head");
             return Err(ForkchoiceTaskError::FinalizedAheadOfUnsafe(
                 state.unsafe_head().block_info.number,
                 state.finalized_head().block_info.number,
@@ -49,6 +50,7 @@ impl EngineTaskExt for ForkchoiceTask {
 
         // Handle the forkchoice update result.
         if let Err(e) = self.client.fork_choice_updated_v3(forkchoice, None).await {
+            info!(target: "engine", "Forkchoice update failed: {e}");
             let e = e
                 .as_error_resp()
                 .and_then(|e| {
@@ -59,6 +61,8 @@ impl EngineTaskExt for ForkchoiceTask {
 
             return Err(e.into());
         }
+
+        info!(target: "engine", "Forkchoice update successful");
 
         state.forkchoice_update_needed = false;
         Ok(())

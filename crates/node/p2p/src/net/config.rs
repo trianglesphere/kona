@@ -11,10 +11,10 @@ use tokio::time::Duration;
 pub struct Config {
     /// Discovery Config.
     pub discovery_config: discv5::Config,
+    /// The interval to discoer random peers.
+    pub discovery_interval: Duration,
     /// The discovery address.
     pub discovery_address: SocketAddr,
-    /// The interval to find peers.
-    pub discovery_interval: Duration,
     /// The gossip address.
     pub gossip_address: libp2p::Multiaddr,
     /// The unsafe block signer.

@@ -111,6 +111,11 @@ impl Discv5Driver {
             }
         };
 
+        if !crate::OpStackEnr::is_valid_node(&enr, self.chain_id) {
+            trace!(target: "p2p::discv5", ?enode, "Invalid ENR");
+            return None;
+        }
+
         if let Err(err) = self.disc.add_enr(enr.clone()) {
             warn!(
                 ?enode,
@@ -157,7 +162,7 @@ impl Discv5Driver {
         // Note, discv5's table may not accept new ENRs above a certain limit.
         // Instead of erroring, we log the failure as a debug log.
         count = 0;
-        for enr in self.store.valid_peers() {
+        for enr in self.store.valid_peers(self.chain_id) {
             let validation = EnrValidation::validate(enr, self.chain_id);
             if validation.is_invalid() {
                 debug!(target: "discovery", "Ignoring Invalid Bootnode ENR: {:?}. {:?}", enr, validation);
@@ -302,6 +307,7 @@ impl Discv5Driver {
                                 debug!(target: "discovery", "Failed to find node: {:?}", err);
                             }
                         }
+                        self.forward(enr_sender.clone()).await;
                     }
                     _ = store_interval.tick() => {
                         let enrs = self.disc.table_entries_enr();

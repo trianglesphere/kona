@@ -162,6 +162,6 @@ impl GossipDriverBuilder {
             .with_swarm_config(|c| c.with_idle_connection_timeout(timeout))
             .build();
 
-        Ok(GossipDriver::new(swarm, addr, handler.clone()))
+        Ok(GossipDriver::new(swarm, chain_id, addr, handler.clone()))
     }
 }
