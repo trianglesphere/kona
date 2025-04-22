@@ -79,7 +79,8 @@ impl Discv5Driver {
         chain_id: u64,
         bootstore: Option<PathBuf>,
     ) -> Self {
-        let store = BootStore::from_chain_id(chain_id, bootstore);
+        let prefix = "discovery".to_string();
+        let store = BootStore::from_chain_id(prefix, chain_id, bootstore);
         Self { disc, chain_id, store, interval }
     }
 
@@ -157,12 +158,7 @@ impl Discv5Driver {
         // Note, discv5's table may not accept new ENRs above a certain limit.
         // Instead of erroring, we log the failure as a debug log.
         count = 0;
-        for enr in self.store.valid_peers() {
-            let validation = EnrValidation::validate(enr, self.chain_id);
-            if validation.is_invalid() {
-                debug!(target: "discovery", "Ignoring Invalid Bootnode ENR: {:?}. {:?}", enr, validation);
-                continue;
-            }
+        for enr in self.store.valid_peers_with_chain_id(self.chain_id) {
             match self.disc.add_enr(enr.clone()) {
                 Ok(_) => count += 1,
                 Err(e) => debug!(target: "discovery", "Failed to add ENR to discv5 table: {:?}", e),
@@ -202,9 +198,9 @@ impl Discv5Driver {
         );
     }
 
-    /// Sends ENRs from the boot store to the enr receiver.
+    /// Sends only valid ENRs from the boot store to the enr receiver.
     pub async fn forward(&mut self, enr_sender: tokio::sync::mpsc::Sender<Enr>) {
-        for enr in self.store.peers() {
+        for enr in self.store.valid_peers_with_chain_id(self.chain_id) {
             if let Err(e) = enr_sender.send(enr.clone()).await {
                 info!(target: "discovery", "Failed to forward enr: {:?}", e);
             }

@@ -141,13 +141,14 @@ impl BootStore {
     }
 
     /// Returns the [`PathBuf`] for the given chain id.
-    pub fn path(chain_id: u64, datadir: Option<PathBuf>) -> PathBuf {
+    pub fn path(prefix: String, chain_id: u64, datadir: Option<PathBuf>) -> PathBuf {
         let mut path = datadir.unwrap_or_else(|| {
             let mut home = dirs::home_dir().expect("Failed to get home directory");
             home.push(".kona");
             home
         });
         path.push(chain_id.to_string());
+        path.push(prefix);
         path.push("bootstore.json");
         path
     }
@@ -155,8 +156,8 @@ impl BootStore {
     /// Reads a new [`BootStore`] from the given chain id and data directory.
     ///
     /// If the file cannot be read, an empty [`BootStore`] is returned.
-    pub fn from_chain_id(chain_id: u64, datadir: Option<PathBuf>) -> Self {
-        let path = Self::path(chain_id, datadir);
+    pub fn from_chain_id(prefix: String, chain_id: u64, datadir: Option<PathBuf>) -> Self {
+        let path = Self::path(prefix, chain_id, datadir);
         Self::from_file(&path)
     }
 

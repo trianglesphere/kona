@@ -114,6 +114,23 @@ pub struct P2PArgs {
     #[arg(long = "p2p.ban.duration", default_value = "30", env = "KONA_NODE_P2P_BAN_DURATION")]
     pub ban_duration: u32,
 
+    /// The path of the discovery database to persist discovered ENRs.
+    ///
+    /// ENRs persisted this way are used to bootstrap the `discv5` discovery table.
+    /// Set to "memory" to disable persisting the discovery store.
+    /// If unset, the default path will be used based on the home directory and chain id.
+    #[arg(long = "p2p.discovery.path", env = "KONA_NODE_P2P_DISCOVERY_PATH")]
+    pub discovery_store: Option<PathBuf>,
+
+    /// The path of the peerstore database to persist gossip ENRs.
+    ///
+    /// The peerstore holds a record of ENRs used to bootstrap the libp2p gossip swarm
+    /// on startup (or restart).
+    /// Set to "memory" to disable persisting the gossip peerstore.
+    /// Peerstore records will be pruned / expire as necesssary.
+    #[arg(long = "p2p.peerstore.path", env = "KONA_NODE_P2P_PEERSTORE_PATH")]
+    pub peer_store: Option<PathBuf>,
+
     /// The interval in seconds to find peers using the discovery service.
     /// Defaults to 5 seconds.
     #[arg(
@@ -122,9 +139,6 @@ pub struct P2PArgs {
         env = "KONA_NODE_P2P_DISCOVERY_INTERVAL"
     )]
     pub discovery_interval: u64,
-    /// The directory to store the bootstore.
-    #[arg(long = "p2p.bootstore", env = "KONA_NODE_P2P_BOOTSTORE")]
-    pub bootstore: Option<PathBuf>,
 }
 
 impl Default for P2PArgs {
@@ -150,7 +164,8 @@ impl Default for P2PArgs {
             ban_threshold: 0,
             ban_duration: 30,
             discovery_interval: 5,
-            bootstore: None,
+            discovery_store: None,
+            peer_store: None,
         }
     }
 }
@@ -239,7 +254,8 @@ impl P2PArgs {
             scoring: self.scoring,
             block_time,
             monitor_peers,
-            bootstore: self.bootstore.clone(),
+            discovery_store: self.discovery_store.clone(),
+            peer_store: self.peer_store.clone(),
         })
     }
 

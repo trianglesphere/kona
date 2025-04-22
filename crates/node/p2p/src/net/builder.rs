@@ -36,7 +36,8 @@ impl From<Config> for NetworkBuilder {
     fn from(config: Config) -> Self {
         Self::new()
             .with_discovery_config(config.discovery_config)
-            .with_bootstore(config.bootstore)
+            .with_discovery_store(config.discovery_store)
+            .with_peer_store(config.peer_store)
             .with_discovery_interval(config.discovery_interval)
             .with_discovery_address(config.discovery_address)
             .with_gossip_address(config.gossip_address)
@@ -62,10 +63,18 @@ impl NetworkBuilder {
         }
     }
 
-    /// Sets the bootstore path for the [`crate::Discv5Driver`].
-    pub fn with_bootstore(self, bootstore: Option<PathBuf>) -> Self {
-        if let Some(bootstore) = bootstore {
-            return Self { discovery: self.discovery.with_bootstore(bootstore), ..self };
+    /// Sets the path for the [`crate::Discv5Driver`] ENR store.
+    pub fn with_discovery_store(self, store: Option<PathBuf>) -> Self {
+        if let Some(store) = store {
+            return Self { discovery: self.discovery.with_store(store), ..self };
+        }
+        self
+    }
+
+    /// Sets the path for the [`crate::GossipDriver`] peer store.
+    pub fn with_peer_store(self, store: Option<PathBuf>) -> Self {
+        if let Some(store) = store {
+            return Self { gossip: self.gossip.with_store(store), ..self };
         }
         self
     }

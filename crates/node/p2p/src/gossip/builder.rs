@@ -35,6 +35,8 @@ pub struct GossipDriverBuilder {
     /// If set, the gossip layer will monitor peer scores and ban peers that are below a given
     /// threshold.
     peer_monitoring: Option<PeerMonitoring>,
+    /// The path to the peer store.
+    peer_store: Option<PathBuf>,
 }
 
 impl GossipDriverBuilder {
@@ -50,10 +52,17 @@ impl GossipDriverBuilder {
             config: None,
             block_time: None,
             peer_monitoring: None,
+            peer_store: None,
         }
     }
 
-    /// Specifies the chain ID of the gossip driver.
+    /// Sets the path to the peer store.
+    pub fn with_store(mut self, path: PathBuf) -> Self {
+        self.peer_store = Some(path);
+        self
+    }
+
+    /// Sets the chain ID of the gossip driver.
     pub fn with_chain_id(mut self, chain_id: u64) -> Self {
         self.chain_id = Some(chain_id);
         self

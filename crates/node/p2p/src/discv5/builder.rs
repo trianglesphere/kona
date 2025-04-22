@@ -22,8 +22,8 @@ pub struct Discv5Builder {
     listen_config: Option<ListenConfig>,
     /// The discovery config for the discovery service.
     discovery_config: Option<Config>,
-    /// An optional path to the bootstore.
-    bootstore: Option<PathBuf>,
+    /// An optional path to the store.
+    store: Option<PathBuf>,
 }
 
 impl Discv5Builder {
@@ -35,13 +35,13 @@ impl Discv5Builder {
             interval: None,
             listen_config: None,
             discovery_config: None,
-            bootstore: None,
+            store: None,
         }
     }
 
-    /// Sets the bootstore path.
-    pub fn with_bootstore(mut self, bootstore: PathBuf) -> Self {
-        self.bootstore = Some(bootstore);
+    /// Sets the store path.
+    pub fn with_store(mut self, store: PathBuf) -> Self {
+        self.store = Some(store);
         self
     }
 
@@ -118,7 +118,7 @@ impl Discv5Builder {
         let disc =
             Discv5::new(enr, key, config).map_err(|_| Discv5BuilderError::Discv5CreationFailed)?;
 
-        Ok(Discv5Driver::new(disc, interval, chain_id, self.bootstore.clone()))
+        Ok(Discv5Driver::new(disc, interval, chain_id, self.store.clone()))
     }
 }
 

@@ -29,6 +29,8 @@ pub struct Config {
     pub monitor_peers: Option<PeerMonitoring>,
     /// The L2 Block Time.
     pub block_time: u64,
-    /// An optional path to the bootstore.
-    pub bootstore: Option<PathBuf>,
+    /// An optional path to the discovery store.
+    pub discovery_store: Option<PathBuf>,
+    /// An optional path to the gossip peer store.
+    pub peer_store: Option<PathBuf>,
 }
