@@ -237,6 +237,20 @@ impl Discv5Driver {
             // Interval at which to sync the boot store.
             let mut store_interval = tokio::time::interval(Duration::from_secs(60));
 
+            // Continuously attempt to start the event stream.
+            let mut event_stream = loop {
+                match self.disc.event_stream().await {
+                    Ok(event_stream) => {
+                        break event_stream;
+                    }
+                    Err(e) => {
+                        warn!(target: "discovery", "Failed to start event stream: {:?}", e);
+                        sleep(Duration::from_secs(2)).await;
+                        info!(target: "discovery", "Retrying event stream startup...");
+                    }
+                }
+            };
+
             // Step 3: Run the core driver loop.
             loop {
                 tokio::select! {
@@ -290,6 +304,39 @@ impl Discv5Driver {
                             None => {
                                 trace!(target: "discovery", "Receiver `None` peer enr");
                             }
+                        }
+                    }
+                    event = event_stream.recv() => {
+                        let Some(event) = event else {
+                            trace!(target: "discovery", "Receiver `None` event");
+                            continue;
+                        };
+                        match event {
+                            discv5::Event::Discovered(enr) => {
+                                if EnrValidation::validate(&enr, chain_id).is_valid() {
+                                    debug!(target: "discovery", "Valid ENR discovered, forwarding to swarm: {:?}", enr);
+                                    self.store.add_enr(enr.clone());
+                                    let sender = enr_sender.clone();
+                                    tokio::spawn(async move {
+                                        if let Err(e) = sender.send(enr).await {
+                                            debug!(target: "discovery", "Failed to send enr: {:?}", e);
+                                        }
+                                    });
+                                }
+                            }
+                            discv5::Event::SessionEstablished(enr, addr) => {
+                                if EnrValidation::validate(&enr, chain_id).is_valid() {
+                                    debug!(target: "discovery", "Session established with valid ENR, forwarding to swarm. Address: {:?}, ENR: {:?}", addr, enr);
+                                    self.store.add_enr(enr.clone());
+                                    let sender = enr_sender.clone();
+                                    tokio::spawn(async move {
+                                        if let Err(e) = sender.send(enr).await {
+                                            debug!(target: "discovery", "Failed to send enr: {:?}", e);
+                                        }
+                                    });
+                                }
+                            }
+                            _ => {}
                         }
                     }
                     _ = interval.tick() => {
