@@ -142,7 +142,7 @@ impl Discovery {
                     }
                 }
                 _ = disc_ticker.tick() => {
-                    if let Ok(c) = handler.peer_count().try_recv() {
+                    if let Ok(c) = handler.peer_count().await {
                         let now = std::time::SystemTime::now();
                         let since = now
                             .duration_since(std::time::UNIX_EPOCH)
