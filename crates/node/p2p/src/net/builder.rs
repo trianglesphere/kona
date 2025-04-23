@@ -39,7 +39,7 @@ impl From<Config> for NetworkBuilder {
             .with_bootstore(config.bootstore)
             .with_discovery_interval(config.discovery_interval)
             .with_discovery_address(config.discovery_address)
-            .with_gossip_address(config.gossip_address)
+            .with_gossip_socket(config.gossip_socket)
             .with_unsafe_block_signer(config.unsafe_block_signer)
             .with_gossip_config(config.gossip_config)
             .with_peer_scoring(config.scoring)
@@ -144,8 +144,14 @@ impl NetworkBuilder {
     }
 
     /// Sets the gossip address for the [`crate::GossipDriver`].
-    pub fn with_gossip_address(self, addr: Multiaddr) -> Self {
-        Self { gossip: self.gossip.with_address(addr), ..self }
+    pub fn with_gossip_socket(self, socket: SocketAddr) -> Self {
+        let mut multiaddr = Multiaddr::from(socket.ip());
+        multiaddr.push(libp2p::multiaddr::Protocol::Tcp(socket.port()));
+        Self {
+            gossip: self.gossip.with_address(multiaddr),
+            discovery: self.discovery.with_tcp_port(socket.port()),
+            ..self
+        }
     }
 
     /// Sets the timeout for the [`crate::GossipDriver`].
@@ -248,7 +254,7 @@ mod tests {
             .with_unsafe_block_signer(signer)
             .with_chain_id(id)
             .with_rpc_receiver(tokio::sync::mpsc::channel(1).1)
-            .with_gossip_address(gossip_addr.clone())
+            .with_gossip_socket(gossip)
             .with_discovery_address(disc)
             .build()
             .unwrap();
@@ -275,8 +281,6 @@ mod tests {
         let id = 10;
         let signer = Address::random();
         let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9099);
-        let mut gossip_addr = Multiaddr::from(gossip.ip());
-        gossip_addr.push(libp2p::multiaddr::Protocol::Tcp(gossip.port()));
         let disc = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9097);
         let discovery_config =
             ConfigBuilder::new(ListenConfig::from_ip(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9098))
@@ -284,7 +288,7 @@ mod tests {
         let driver = NetworkBuilder::new()
             .with_unsafe_block_signer(signer)
             .with_chain_id(id)
-            .with_gossip_address(gossip_addr)
+            .with_gossip_socket(gossip)
             .with_discovery_address(disc)
             .with_discovery_config(discovery_config)
             .with_rpc_receiver(tokio::sync::mpsc::channel(1).1)

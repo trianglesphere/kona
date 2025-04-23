@@ -205,7 +205,7 @@ impl Discv5Driver {
     pub async fn forward(&mut self, enr_sender: tokio::sync::mpsc::Sender<Enr>) {
         for enr in self.store.peers() {
             if let Err(e) = enr_sender.send(enr.clone()).await {
-                info!(target: "discovery", "Failed to forward enr: {:?}", e);
+                debug!(target: "discovery", "Failed to forward enr: {:?}", e);
             }
         }
     }

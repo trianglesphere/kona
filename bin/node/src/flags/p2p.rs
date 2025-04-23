@@ -238,7 +238,7 @@ impl P2PArgs {
             discovery_config,
             discovery_interval: Duration::from_secs(self.discovery_interval),
             discovery_address: SocketAddr::new(self.listen_ip, self.listen_udp_port),
-            gossip_address: multiaddr,
+            gossip_socket: SocketAddr::new(self.listen_ip, self.listen_tcp_port),
             keypair: self.keypair().unwrap_or_else(|_| Keypair::generate_secp256k1()),
             unsafe_block_signer: args.genesis_signer()?,
             gossip_config,

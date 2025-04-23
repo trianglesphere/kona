@@ -21,7 +21,6 @@ use clap::{ArgAction, Parser};
 use kona_cli::init_tracing_subscriber;
 use kona_p2p::Network;
 use kona_registry::ROLLUP_CONFIGS;
-use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tracing_subscriber::EnvFilter;
 
@@ -64,13 +63,11 @@ impl GossipCommand {
         let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), self.gossip_port);
         tracing::info!("Starting gossip driver on {:?}", gossip);
 
-        let mut gossip_addr = Multiaddr::from(gossip.ip());
-        gossip_addr.push(libp2p::multiaddr::Protocol::Tcp(gossip.port()));
         let disc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), self.disc_port);
         let mut network = Network::builder()
             .with_discovery_address(disc_addr)
             .with_chain_id(self.l2_chain_id)
-            .with_gossip_address(gossip_addr)
+            .with_gossip_socket(gossip)
             .with_unsafe_block_signer(signer)
             .build()?;
 

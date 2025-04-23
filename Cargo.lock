@@ -2706,7 +2706,6 @@ dependencies = [
  "kona-cli",
  "kona-p2p",
  "kona-registry",
- "libp2p",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.19",

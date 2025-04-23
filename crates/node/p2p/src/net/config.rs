@@ -15,8 +15,8 @@ pub struct Config {
     pub discovery_address: SocketAddr,
     /// The interval to find peers.
     pub discovery_interval: Duration,
-    /// The gossip address.
-    pub gossip_address: libp2p::Multiaddr,
+    /// The socket address for the libp2p gossip service.
+    pub gossip_socket: SocketAddr,
     /// The unsafe block signer.
     pub unsafe_block_signer: Address,
     /// The keypair.

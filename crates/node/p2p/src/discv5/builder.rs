@@ -16,6 +16,8 @@ pub struct Discv5Builder {
     address: Option<SocketAddr>,
     /// The chain ID of the network.
     chain_id: Option<u64>,
+    /// The TCP port of the libp2p gossip service.
+    tcp_port: Option<u16>,
     /// The interval to find peers.
     interval: Option<Duration>,
     /// The listen config for the discovery service.
@@ -32,6 +34,7 @@ impl Discv5Builder {
         Self {
             address: None,
             chain_id: None,
+            tcp_port: None,
             interval: None,
             listen_config: None,
             discovery_config: None,
@@ -48,6 +51,12 @@ impl Discv5Builder {
     /// Sets the discovery service address.
     pub fn with_address(mut self, address: SocketAddr) -> Self {
         self.address = Some(address);
+        self
+    }
+
+    /// Sets the TCP port of the libp2p gossip service.
+    pub fn with_tcp_port(mut self, tcp_port: u16) -> Self {
+        self.tcp_port = Some(tcp_port);
         self
     }
 
@@ -102,12 +111,18 @@ impl Discv5Builder {
         enr_builder.add_value_rlp(OpStackEnr::OP_CL_KEY, opstack_data.into());
         match config.listen_config {
             ListenConfig::Ipv4 { ip, port } => {
+                // Advertise the gossip tcp port as the ENR port.
+                let port = self.tcp_port.unwrap_or(port);
                 enr_builder.ip4(ip).tcp4(port);
             }
             ListenConfig::Ipv6 { ip, port } => {
+                // Advertise the gossip tcp port as the ENR port.
+                let port = self.tcp_port.unwrap_or(port);
                 enr_builder.ip6(ip).tcp6(port);
             }
             ListenConfig::DualStack { ipv4, ipv4_port, ipv6, ipv6_port } => {
+                let ipv4_port = self.tcp_port.unwrap_or(ipv4_port);
+                let ipv6_port = self.tcp_port.unwrap_or(ipv6_port);
                 enr_builder.ip4(ipv4).tcp4(ipv4_port);
                 enr_builder.ip6(ipv6).tcp6(ipv6_port);
             }
