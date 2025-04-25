@@ -6,6 +6,17 @@ use kona_rpc::ProtocolVersionError;
 /// Error type for the runtime loader.
 #[derive(thiserror::Error, Debug)]
 pub enum RuntimeCallError {
+    /// The block was not found.
+    #[error("Block not found")]
+    BlockNotFound,
+    /// Block Hash Mismatch.
+    #[error("Block hash mismatch: expected {expected:?}, got {got:?}")]
+    BlockHashMismatch {
+        /// Expected block hash
+        expected: alloy_primitives::B256,
+        /// Actual block hash
+        got: alloy_primitives::B256,
+    },
     /// Transport error
     #[error(transparent)]
     Transport(#[from] RpcError<TransportErrorKind>),

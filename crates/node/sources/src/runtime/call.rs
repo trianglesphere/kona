@@ -1,15 +1,21 @@
 //! Calling module
 
-use alloy_primitives::{Address, B256, b256};
+use alloy_primitives::{Address, B256, U256, b256};
 use alloy_provider::Provider;
-use futures::FutureExt;
+use alloy_rpc_types::Block;
+use alloy_transport::{RpcError, TransportErrorKind};
+use futures::{FutureExt, future::BoxFuture, ready};
 use kona_derive::traits::ChainProvider;
 use kona_genesis::RollupConfig;
 use kona_protocol::BlockInfo;
-use kona_providers_alloy::AlloyChainProvider;
+use kona_providers_alloy::{AlloyChainProvider, AlloyChainProviderError};
 use kona_rpc::ProtocolVersion;
-use std::{future::Future, pin::Pin, sync::Arc, task::{Context, Poll}};
-use futures::future::BoxFuture;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use crate::{RuntimeCallError, RuntimeConfig};
 
@@ -43,19 +49,53 @@ enum LoadState {
     /// Initial state
     Init,
     /// Getting latest block number
-    GettingLatestBlock(BoxFuture<'static, Result<u64, AlloyChainProviderError>>),
+    GettingLatestBlock(BoxFuture<'static, Result<u64, RpcError<TransportErrorKind>>>),
     /// Getting block info
     GettingBlockInfo(BoxFuture<'static, Result<BlockInfo, AlloyChainProviderError>>),
     /// Getting block hash verification
-    VerifyingBlockHash(BlockInfo, BoxFuture<'static, Result<Option<Block>, AlloyTransportError>>),
+    VerifyingBlockHash(
+        BlockInfo,
+        BoxFuture<'static, Result<Option<Block>, RpcError<TransportErrorKind>>>,
+    ),
     /// Getting unsafe block signer
-    GettingUnsafeBlockSigner(BlockInfo, BoxFuture<'static, Result<B256, AlloyTransportError>>),
+    GettingUnsafeBlockSigner(
+        BlockInfo,
+        BoxFuture<'static, Result<U256, RpcError<TransportErrorKind>>>,
+    ),
     /// Getting required protocol version
-    GettingRequiredProtocolVersion(BlockInfo, Address, BoxFuture<'static, Result<B256, AlloyTransportError>>),
+    GettingRequiredProtocolVersion(
+        BlockInfo,
+        Address,
+        BoxFuture<'static, Result<U256, RpcError<TransportErrorKind>>>,
+    ),
     /// Getting recommended protocol version
-    GettingRecommendedProtocolVersion(BlockInfo, Address, ProtocolVersion, BoxFuture<'static, Result<B256, AlloyTransportError>>),
+    GettingRecommendedProtocolVersion(
+        BlockInfo,
+        Address,
+        ProtocolVersion,
+        BoxFuture<'static, Result<U256, RpcError<TransportErrorKind>>>,
+    ),
     /// Done loading
     Done,
+}
+
+impl core::fmt::Debug for LoadState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            LoadState::Init => write!(f, "Init"),
+            LoadState::GettingLatestBlock(_) => write!(f, "GettingLatestBlock"),
+            LoadState::GettingBlockInfo(_) => write!(f, "GettingBlockInfo"),
+            LoadState::VerifyingBlockHash(_, _) => write!(f, "VerifyingBlockHash"),
+            LoadState::GettingUnsafeBlockSigner(_, _) => write!(f, "GettingUnsafeBlockSigner"),
+            LoadState::GettingRequiredProtocolVersion(_, _, _) => {
+                write!(f, "GettingRequiredProtocolVersion")
+            }
+            LoadState::GettingRecommendedProtocolVersion(_, _, _, _) => {
+                write!(f, "GettingRecommendedProtocolVersion")
+            }
+            LoadState::Done => write!(f, "Done"),
+        }
+    }
 }
 
 impl RuntimeCall {
@@ -81,46 +121,54 @@ impl Future for RuntimeCall {
                     // If we have block info, skip to verification
                     if let Some(block_info) = self.block_info.take() {
                         let fut = self.provider.inner.get_block(block_info.hash.into());
-                        self.state = LoadState::VerifyingBlockHash(block_info, Box::pin(fut));
+                        self.state =
+                            LoadState::VerifyingBlockHash(block_info, Box::pin(fut.into_future()));
                     } else {
                         let fut = self.provider.latest_block_number();
                         self.state = LoadState::GettingLatestBlock(Box::pin(fut));
                     }
                 }
 
-                LoadState::GettingLatestBlock(fut) => {
-                    match ready!(fut.as_mut().poll(cx)) {
-                        Ok(block_num) => {
-                            let fut = self.provider.block_info_by_number(block_num);
-                            self.state = LoadState::GettingBlockInfo(Box::pin(fut));
-                        }
-                        Err(e) => return Poll::Ready(Err(e.into())),
+                LoadState::GettingLatestBlock(fut) => match ready!(fut.as_mut().poll(cx)) {
+                    Ok(block_num) => {
+                        let fut = self.provider.block_info_by_number(block_num);
+                        self.state = LoadState::GettingBlockInfo(Box::pin(fut));
                     }
-                }
+                    Err(e) => return Poll::Ready(Err(e.into())),
+                },
 
-                LoadState::GettingBlockInfo(fut) => {
-                    match ready!(fut.as_mut().poll(cx)) {
-                        Ok(block_info) => {
-                            let fut = self.provider.inner.get_block(block_info.hash.into());
-                            self.state = LoadState::VerifyingBlockHash(block_info, Box::pin(fut));
-                        }
-                        Err(e) => return Poll::Ready(Err(e.into())),
+                LoadState::GettingBlockInfo(fut) => match ready!(fut.as_mut().poll(cx)) {
+                    Ok(block_info) => {
+                        let fut = self.provider.inner.get_block(block_info.hash.into());
+                        self.state =
+                            LoadState::VerifyingBlockHash(block_info, Box::pin(fut.into_future()));
                     }
-                }
+                    Err(e) => return Poll::Ready(Err(e.into())),
+                },
 
                 LoadState::VerifyingBlockHash(block_info, fut) => {
                     match ready!(fut.as_mut().poll(cx)) {
                         Ok(Some(block)) => {
                             if block.header.hash != block_info.hash {
-                                return Poll::Ready(Err(RuntimeCallError::BlockHashMismatch));
+                                return Poll::Ready(Err(RuntimeCallError::BlockHashMismatch {
+                                    expected: block_info.hash,
+                                    got: block.header.hash,
+                                }));
                             }
-                            let fut = self.provider.inner.get_storage_at(
-                                self.config.l1_system_config_address,
-                                UNSAFE_BLOCK_SIGNER_ADDRESS_STORAGE_SLOT.into(),
-                            ).hash(block_info.hash);
-                            self.state = LoadState::GettingUnsafeBlockSigner(*block_info, Box::pin(fut));
+                            let fut = self
+                                .provider
+                                .inner
+                                .get_storage_at(
+                                    self.config.l1_system_config_address,
+                                    UNSAFE_BLOCK_SIGNER_ADDRESS_STORAGE_SLOT.into(),
+                                )
+                                .hash(block_info.hash);
+                            self.state = LoadState::GettingUnsafeBlockSigner(
+                                *block_info,
+                                Box::pin(fut.into_future()),
+                            );
                         }
-                        Ok(None) => return Poll::Ready(Err(RuntimeLoaderError::BlockNotFound)),
+                        Ok(None) => return Poll::Ready(Err(RuntimeCallError::BlockNotFound)),
                         Err(e) => return Poll::Ready(Err(e.into())),
                     }
                 }
@@ -128,7 +176,8 @@ impl Future for RuntimeCall {
                 LoadState::GettingUnsafeBlockSigner(block_info, fut) => {
                     match ready!(fut.as_mut().poll(cx)) {
                         Ok(storage) => {
-                            let unsafe_block_signer = Address::from_slice(&storage.to_be_bytes_vec()[12..]);
+                            let unsafe_block_signer =
+                                Address::from_slice(&storage.to_be_bytes_vec()[12..]);
                             if self.config.protocol_versions_address == Address::ZERO {
                                 // If protocol versions address is not set, return default config
                                 let config = RuntimeConfig {
@@ -142,14 +191,18 @@ impl Future for RuntimeCall {
                                 };
                                 return Poll::Ready(Ok(config));
                             }
-                            let fut = self.provider.inner.get_storage_at(
-                                self.config.protocol_versions_address,
-                                REQUIRED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
-                            ).hash(block_info.hash);
+                            let fut = self
+                                .provider
+                                .inner
+                                .get_storage_at(
+                                    self.config.protocol_versions_address,
+                                    REQUIRED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
+                                )
+                                .hash(block_info.hash);
                             self.state = LoadState::GettingRequiredProtocolVersion(
                                 *block_info,
                                 unsafe_block_signer,
-                                Box::pin(fut),
+                                Box::pin(fut.into_future()),
                             );
                         }
                         Err(e) => return Poll::Ready(Err(e.into())),
@@ -158,46 +211,49 @@ impl Future for RuntimeCall {
 
                 LoadState::GettingRequiredProtocolVersion(block_info, unsafe_block_signer, fut) => {
                     match ready!(fut.as_mut().poll(cx)) {
-                        Ok(storage) => {
-                            match ProtocolVersion::decode(storage.into()) {
-                                Ok(required_version) => {
-                                    let fut = self.provider.inner.get_storage_at(
+                        Ok(storage) => match ProtocolVersion::decode(storage.into()) {
+                            Ok(required_version) => {
+                                let fut = self
+                                    .provider
+                                    .inner
+                                    .get_storage_at(
                                         self.config.protocol_versions_address,
                                         RECOMMENDED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
-                                    ).hash(block_info.hash);
-                                    self.state = LoadState::GettingRecommendedProtocolVersion(
-                                        *block_info,
-                                        *unsafe_block_signer,
-                                        required_version,
-                                        Box::pin(fut),
-                                    );
-                                }
-                                Err(e) => return Poll::Ready(Err(e.into())),
+                                    )
+                                    .hash(block_info.hash);
+                                self.state = LoadState::GettingRecommendedProtocolVersion(
+                                    *block_info,
+                                    *unsafe_block_signer,
+                                    required_version,
+                                    Box::pin(fut.into_future()),
+                                );
                             }
-                        }
+                            Err(e) => return Poll::Ready(Err(e.into())),
+                        },
                         Err(e) => return Poll::Ready(Err(e.into())),
                     }
                 }
 
-                LoadState::GettingRecommendedProtocolVersion(block_info, unsafe_block_signer, required_version, fut) => {
-                    match ready!(fut.as_mut().poll(cx)) {
-                        Ok(storage) => {
-                            match ProtocolVersion::decode(storage.into()) {
-                                Ok(recommended_version) => {
-                                    let config = RuntimeConfig {
-                                        unsafe_block_signer_address: *unsafe_block_signer,
-                                        required_protocol_version: *required_version,
-                                        recommended_protocol_version: recommended_version,
-                                    };
-                                    self.state = LoadState::Done;
-                                    return Poll::Ready(Ok(config));
-                                }
-                                Err(e) => return Poll::Ready(Err(e.into())),
-                            }
+                LoadState::GettingRecommendedProtocolVersion(
+                    block_info,
+                    unsafe_block_signer,
+                    required_version,
+                    fut,
+                ) => match ready!(fut.as_mut().poll(cx)) {
+                    Ok(storage) => match ProtocolVersion::decode(storage.into()) {
+                        Ok(recommended_version) => {
+                            let config = RuntimeConfig {
+                                unsafe_block_signer_address: *unsafe_block_signer,
+                                required_protocol_version: *required_version,
+                                recommended_protocol_version: recommended_version,
+                            };
+                            self.state = LoadState::Done;
+                            return Poll::Ready(Ok(config));
                         }
                         Err(e) => return Poll::Ready(Err(e.into())),
-                    }
-                }
+                    },
+                    Err(e) => return Poll::Ready(Err(e.into())),
+                },
 
                 LoadState::Done => {
                     panic!("RuntimeLoaderCall polled after completion");

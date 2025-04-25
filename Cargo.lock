@@ -5018,6 +5018,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-primitives",
  "alloy-provider",
+ "alloy-rpc-types",
  "alloy-transport",
  "futures",
  "kona-cli",
