@@ -3,6 +3,9 @@
 //! Adapted from the `op-node`
 //! <https://github.com/ethereum-optimism/optimism/blob/develop/op-node/node/runtime_config.go>.
 
+mod call;
+pub use call::RuntimeCall;
+
 mod config;
 pub use config::RuntimeConfig;
 

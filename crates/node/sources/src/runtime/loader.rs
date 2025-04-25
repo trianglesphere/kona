@@ -1,6 +1,6 @@
 //! Contains the [`RuntimeLoader`] implementation.
 
-use crate::{RuntimeConfig, RuntimeLoaderError};
+use crate::{RuntimeCall, RuntimeConfig, RuntimeLoaderError};
 use alloy_primitives::{Address, B256, b256};
 use alloy_provider::Provider;
 use kona_derive::traits::ChainProvider;
@@ -55,15 +55,48 @@ impl RuntimeLoader {
         }
     }
 
-    /// Loads the [`RuntimeConfig`] for the latest block.
-    pub async fn load_latest(&mut self) -> Result<RuntimeConfig, RuntimeLoaderError> {
-        let latest_block_num = self.provider.latest_block_number().await?;
-        let block_info = self.provider.block_info_by_number(latest_block_num).await?;
-        self.load(block_info).await
+    /// Creates a new [`RuntimeCall`] that can be used to load the [`RuntimeConfig`].
+    ///
+    /// By default, the latest block is used.
+    /// To set a specific block, use [`RuntimeCall::block_info`].
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use alloy_primitives::Address;
+    /// use kona_genesis::RollupConfig;
+    /// use kona_protocol::BlockInfo;
+    /// use kona_rpc::ProtocolVersion;
+    /// use kona_sources::RuntimeLoader;
+    /// use kona_derive::traits::ChainProvider;
+    /// use std::sync::Arc;
+    /// use url::Url;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let l1_eth_rpc = Url::parse("https://docs-demo.quiknode.pro/").unwrap();
+    ///     let config = Arc::new(RollupConfig::default());
+    ///     let mut loader = RuntimeLoader::new(l1_eth_rpc, config);
+    ///     let num = loader.provider.latest_block_number().await.unwrap();
+    ///     let block_info = loader.provider.block_info_by_number(num).await.unwrap();
+    ///     let runtime_call = loader.load().block_info(block_info);
+    ///     let runtime_config = runtime_call.await.unwrap();
+    ///     assert_eq!(runtime_config.unsafe_block_signer_address, Address::ZERO);
+    /// }
+    /// ```
+    pub fn load(&mut self) -> RuntimeCall {
+        RuntimeCall::new(self.clone())
     }
 
-    /// Loads the [`RuntimeConfig`] for the given [`BlockInfo`].
-    pub async fn load(
+    /// Internal method to load the runtime config for the latest block.
+    pub(crate) async fn load_latest(&mut self) -> Result<RuntimeConfig, RuntimeLoaderError> {
+        let latest_block_num = self.provider.latest_block_number().await?;
+        let block_info = self.provider.block_info_by_number(latest_block_num).await?;
+        self.load_internal(block_info).await
+    }
+
+    /// Internal method to load the runtime config for the given block info.
+    pub(crate) async fn load_internal(
         &mut self,
         block_info: BlockInfo,
     ) -> Result<RuntimeConfig, RuntimeLoaderError> {
@@ -172,7 +205,7 @@ mod tests {
             required_protocol_version: ProtocolVersion::V0(version),
             recommended_protocol_version: ProtocolVersion::V0(version),
         };
-        let runtime_config = loader.load_latest().await.unwrap();
+        let runtime_config = loader.load().await.unwrap();
         assert_eq!(runtime_config, expected);
     }
 }

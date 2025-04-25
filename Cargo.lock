@@ -5023,6 +5023,7 @@ dependencies = [
 name = "kona-sources"
 version = "0.1.0"
 dependencies = [
+ "alloy-eips 0.15.6",
  "alloy-primitives",
  "alloy-provider",
  "alloy-transport",
@@ -5034,6 +5035,7 @@ dependencies = [
  "kona-registry",
  "kona-rpc",
  "lru 0.14.0",
+ "pin-project",
  "thiserror 2.0.12",
  "tokio",
  "tracing",

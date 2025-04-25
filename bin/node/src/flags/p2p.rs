@@ -272,7 +272,7 @@ impl P2PArgs {
         if let Some(url) = l1_rpc {
             let mut loader = RuntimeLoader::new(url, Arc::new(config.clone()));
             let runtime = loader
-                .load_latest()
+                .load()
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to load runtime: {}", e))?;
             return Ok(runtime.unsafe_block_signer_address);
