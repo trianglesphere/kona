@@ -35,7 +35,7 @@ const RECOMMENDED_PROTOCOL_VERSION_STORAGE_SLOT: B256 =
 #[derive(Debug)]
 pub struct RuntimeCall {
     /// The L1 provider
-    provider: AlloyChainProvider,
+    provider: Arc<AlloyChainProvider>,
     /// The rollup config
     config: Arc<RollupConfig>,
     /// Optional block info to use for loading
@@ -45,36 +45,35 @@ pub struct RuntimeCall {
 }
 
 /// The internal state of the loading operation
-#[derive(Debug)]
 enum LoadState {
     /// Initial state
     Init,
     /// Getting latest block number
-    GettingLatestBlock(BoxFuture<'static, Result<u64, AlloyChainProviderError>>),
+    GettingLatestBlock(BoxFuture<'static, Result<u64, RpcError<TransportErrorKind>>>),
     /// Getting block info
     GettingBlockInfo(BoxFuture<'static, Result<BlockInfo, AlloyChainProviderError>>),
     /// Getting block hash verification
     VerifyingBlockHash {
         block_info: BlockInfo,
-        future: BoxFuture<'static, Result<Option<Block>, AlloyChainProviderError>>,
+        future: BoxFuture<'static, Result<Option<Block>, RpcError<TransportErrorKind>>>,
     },
     /// Getting unsafe block signer
     GettingUnsafeBlockSigner {
         block_info: BlockInfo,
-        future: BoxFuture<'static, Result<B256, AlloyChainProviderError>>,
+        future: BoxFuture<'static, Result<U256, RpcError<TransportErrorKind>>>,
     },
     /// Getting required protocol version
     GettingRequiredProtocolVersion {
         block_info: BlockInfo,
         unsafe_block_signer: Address,
-        future: BoxFuture<'static, Result<B256, AlloyChainProviderError>>,
+        future: BoxFuture<'static, Result<U256, RpcError<TransportErrorKind>>>,
     },
     /// Getting recommended protocol version
     GettingRecommendedProtocolVersion {
         block_info: BlockInfo,
         unsafe_block_signer: Address,
         required_version: ProtocolVersion,
-        future: BoxFuture<'static, Result<B256, AlloyChainProviderError>>,
+        future: BoxFuture<'static, Result<U256, RpcError<TransportErrorKind>>>,
     },
     /// Done loading
     Done,
@@ -86,12 +85,12 @@ impl core::fmt::Debug for LoadState {
             LoadState::Init => write!(f, "Init"),
             LoadState::GettingLatestBlock(_) => write!(f, "GettingLatestBlock"),
             LoadState::GettingBlockInfo(_) => write!(f, "GettingBlockInfo"),
-            LoadState::VerifyingBlockHash(_, _) => write!(f, "VerifyingBlockHash"),
-            LoadState::GettingUnsafeBlockSigner(_, _) => write!(f, "GettingUnsafeBlockSigner"),
-            LoadState::GettingRequiredProtocolVersion(_, _, _) => {
+            LoadState::VerifyingBlockHash { .. } => write!(f, "VerifyingBlockHash"),
+            LoadState::GettingUnsafeBlockSigner { .. } => write!(f, "GettingUnsafeBlockSigner"),
+            LoadState::GettingRequiredProtocolVersion { .. } => {
                 write!(f, "GettingRequiredProtocolVersion")
             }
-            LoadState::GettingRecommendedProtocolVersion(_, _, _, _) => {
+            LoadState::GettingRecommendedProtocolVersion { .. } => {
                 write!(f, "GettingRecommendedProtocolVersion")
             }
             LoadState::Done => write!(f, "Done"),
@@ -102,7 +101,7 @@ impl core::fmt::Debug for LoadState {
 impl RuntimeCall {
     /// Creates a new RuntimeCall
     pub fn new(provider: AlloyChainProvider, config: Arc<RollupConfig>) -> Self {
-        Self { provider, config, block_info: None, state: LoadState::Init }
+        Self { provider: Arc::new(provider), config, block_info: None, state: LoadState::Init }
     }
 
     /// Sets the block info to use for loading
@@ -123,12 +122,16 @@ impl Future for RuntimeCall {
                 LoadState::Init => {
                     // If we have block info, skip to verification
                     if let Some(block_info) = this.block_info.take() {
-                        let fut = this.provider.inner.get_block(block_info.hash.into());
-                        this.state =
-                            LoadState::VerifyingBlockHash { block_info, future: Box::pin(fut) };
+                        let provider = this.provider.clone();
+                        let fut = provider.inner.get_block(block_info.hash.into());
+                        this.state = LoadState::VerifyingBlockHash {
+                            block_info,
+                            future: Box::pin(fut.into_future()),
+                        };
                     } else {
-                        let fut = this.provider.latest_block_number();
-                        this.state = LoadState::GettingLatestBlock(Box::pin(fut));
+                        let provider = this.provider.clone();
+                        let fut = provider.latest_block_number();
+                        this.state = LoadState::GettingLatestBlock(Box::pin(fut.into_future()));
                     }
                 }
 
@@ -150,8 +153,10 @@ impl Future for RuntimeCall {
                     match Future::poll(Pin::new(&mut fut), cx) {
                         Poll::Ready(Ok(block_info)) => {
                             let fut = this.provider.inner.get_block(block_info.hash.into());
-                            this.state =
-                                LoadState::VerifyingBlockHash { block_info, future: Box::pin(fut) };
+                            this.state = LoadState::VerifyingBlockHash {
+                                block_info,
+                                future: Box::pin(fut.into_future()),
+                            };
                         }
                         Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                         Poll::Pending => {
@@ -180,7 +185,7 @@ impl Future for RuntimeCall {
                                 .hash(block_info.hash);
                             this.state = LoadState::GettingUnsafeBlockSigner {
                                 block_info,
-                                future: Box::pin(fut),
+                                future: Box::pin(fut.into_future()),
                             };
                         }
                         Poll::Ready(Ok(None)) => {
@@ -223,7 +228,7 @@ impl Future for RuntimeCall {
                             this.state = LoadState::GettingRequiredProtocolVersion {
                                 block_info,
                                 unsafe_block_signer,
-                                future: Box::pin(fut),
+                                future: Box::pin(fut.into_future()),
                             };
                         }
                         Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
@@ -253,7 +258,7 @@ impl Future for RuntimeCall {
                                 block_info,
                                 unsafe_block_signer,
                                 required_version,
-                                future: Box::pin(fut),
+                                future: Box::pin(fut.into_future()),
                             };
                         }
                         Err(e) => return Poll::Ready(Err(e.into())),
@@ -273,7 +278,7 @@ impl Future for RuntimeCall {
                     unsafe_block_signer,
                     required_version,
                     mut future,
-                    ..
+                    block_info,
                 } => match Future::poll(Pin::new(&mut future), cx) {
                     Poll::Ready(Ok(storage)) => match ProtocolVersion::decode(storage.into()) {
                         Ok(recommended_version) => {

@@ -51,12 +51,12 @@ impl AlloyChainProvider {
     }
 
     /// Returns the latest L2 block number.
-    pub async fn latest_block_number(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
+    pub async fn latest_block_number(&self) -> Result<u64, RpcError<TransportErrorKind>> {
         self.inner.get_block_number().await
     }
 
     /// Returns the chain ID.
-    pub async fn chain_id(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
+    pub async fn chain_id(&self) -> Result<u64, RpcError<TransportErrorKind>> {
         self.inner.get_chain_id().await
     }
 }
@@ -98,7 +98,7 @@ impl From<AlloyChainProviderError> for PipelineErrorKind {
 impl ChainProvider for AlloyChainProvider {
     type Error = AlloyChainProviderError;
 
-    async fn header_by_hash(&mut self, hash: B256) -> Result<Header, Self::Error> {
+    async fn header_by_hash(&self, hash: B256) -> Result<Header, Self::Error> {
         if let Some(header) = self.header_by_hash_cache.get(&hash) {
             return Ok(header.clone());
         }
@@ -115,7 +115,7 @@ impl ChainProvider for AlloyChainProvider {
         Ok(header)
     }
 
-    async fn block_info_by_number(&mut self, number: u64) -> Result<BlockInfo, Self::Error> {
+    async fn block_info_by_number(&self, number: u64) -> Result<BlockInfo, Self::Error> {
         let block = self
             .inner
             .get_block_by_number(number.into())
@@ -132,7 +132,7 @@ impl ChainProvider for AlloyChainProvider {
         Ok(block_info)
     }
 
-    async fn receipts_by_hash(&mut self, hash: B256) -> Result<Vec<Receipt>, Self::Error> {
+    async fn receipts_by_hash(&self, hash: B256) -> Result<Vec<Receipt>, Self::Error> {
         if let Some(receipts) = self.receipts_by_hash_cache.get(&hash) {
             return Ok(receipts.clone());
         }
@@ -153,7 +153,7 @@ impl ChainProvider for AlloyChainProvider {
     }
 
     async fn block_info_and_transactions_by_hash(
-        &mut self,
+        &self,
         hash: B256,
     ) -> Result<(BlockInfo, Vec<TxEnvelope>), Self::Error> {
         if let Some(block_info_and_txs) = self.block_info_and_transactions_by_hash_cache.get(&hash)

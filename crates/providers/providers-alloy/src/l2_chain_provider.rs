@@ -54,19 +54,19 @@ impl AlloyL2ChainProvider {
     }
 
     /// Returns the chain ID.
-    pub async fn chain_id(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
+    pub async fn chain_id(&self) -> Result<u64, RpcError<TransportErrorKind>> {
         self.inner.get_chain_id().await
     }
 
     /// Returns the latest L2 block number.
-    pub async fn latest_block_number(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
+    pub async fn latest_block_number(&self) -> Result<u64, RpcError<TransportErrorKind>> {
         self.inner.get_block_number().await
     }
 
     /// Returns the [L2BlockInfo] for the given [BlockId]. [None] is returned if the block
     /// does not exist.
     pub async fn block_info_by_id(
-        &mut self,
+        &self,
         id: BlockId,
     ) -> Result<Option<L2BlockInfo>, RpcError<TransportErrorKind>> {
         let block = match id {
@@ -154,7 +154,7 @@ impl From<AlloyL2ChainProviderError> for PipelineErrorKind {
 impl BatchValidationProvider for AlloyL2ChainProvider {
     type Error = AlloyL2ChainProviderError;
 
-    async fn l2_block_info_by_number(&mut self, number: u64) -> Result<L2BlockInfo, Self::Error> {
+    async fn l2_block_info_by_number(&self, number: u64) -> Result<L2BlockInfo, Self::Error> {
         let block = self
             .block_by_number(number)
             .await
@@ -163,7 +163,7 @@ impl BatchValidationProvider for AlloyL2ChainProvider {
             .map_err(|_| AlloyL2ChainProviderError::L2BlockInfoConstruction(number))
     }
 
-    async fn block_by_number(&mut self, number: u64) -> Result<OpBlock, Self::Error> {
+    async fn block_by_number(&self, number: u64) -> Result<OpBlock, Self::Error> {
         if let Some(block) = self.block_by_number_cache.get(&number) {
             return Ok(block.clone());
         }
@@ -187,7 +187,7 @@ impl L2ChainProvider for AlloyL2ChainProvider {
     type Error = AlloyL2ChainProviderError;
 
     async fn system_config_by_number(
-        &mut self,
+        &self,
         number: u64,
         rollup_config: Arc<RollupConfig>,
     ) -> Result<SystemConfig, <Self as BatchValidationProvider>::Error> {

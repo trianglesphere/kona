@@ -16,10 +16,10 @@ pub trait BatchValidationProvider {
     /// Returns the [L2BlockInfo] given a block number.
     ///
     /// Errors if the block does not exist.
-    async fn l2_block_info_by_number(&mut self, number: u64) -> Result<L2BlockInfo, Self::Error>;
+    async fn l2_block_info_by_number(&self, number: u64) -> Result<L2BlockInfo, Self::Error>;
 
     /// Returns the [OpBlock] for a given number.
     ///
     /// Errors if no block is available for the given block number.
-    async fn block_by_number(&mut self, number: u64) -> Result<OpBlock, Self::Error>;
+    async fn block_by_number(&self, number: u64) -> Result<OpBlock, Self::Error>;
 }
