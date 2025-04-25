@@ -11,3 +11,6 @@ pub use loader::RuntimeLoader;
 
 mod error;
 pub use error::RuntimeLoaderError;
+
+mod call;
+pub use call::RuntimeLoaderCall;
