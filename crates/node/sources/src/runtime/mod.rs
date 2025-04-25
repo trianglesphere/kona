@@ -10,7 +10,7 @@ mod loader;
 pub use loader::RuntimeLoader;
 
 mod error;
-pub use error::RuntimeLoaderError;
+pub use error::RuntimeCallError;
 
 mod call;
-pub use call::RuntimeLoaderCall;
+pub use call::RuntimeCall;

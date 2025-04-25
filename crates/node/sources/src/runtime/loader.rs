@@ -1,15 +1,9 @@
 //! Contains the [`RuntimeLoader`] implementation.
 
-use crate::{RuntimeConfig, RuntimeLoaderError};
-use alloy_primitives::{Address, B256, b256};
-use alloy_provider::Provider;
-use kona_derive::traits::ChainProvider;
+use crate::RuntimeCall;
 use kona_genesis::RollupConfig;
-use kona_protocol::BlockInfo;
 use kona_providers_alloy::AlloyChainProvider;
-use kona_rpc::ProtocolVersion;
-use lru::LruCache;
-use std::{num::NonZeroUsize, sync::Arc};
+use std::sync::Arc;
 use url::Url;
 
 /// The runtime loader.
@@ -25,13 +19,10 @@ impl RuntimeLoader {
     /// Constructs a new [`RuntimeLoader`] with the given provider [`Url`].
     pub fn new(l1_eth_rpc: Url, config: Arc<RollupConfig>) -> Self {
         let provider = AlloyChainProvider::new_http(l1_eth_rpc, 100);
-        Self {
-            provider,
-            config,
-        }
+        Self { provider, config }
     }
 
-    /// Creates a new [`RuntimeLoaderCall`] that can be configured with a [`BlockInfo`].
+    /// Creates a new [`RuntimeCall`] that can be configured with a [`kona_protocol::BlockInfo`].
     ///
     /// By default, `.await` will load the latest block.
     /// Chain a `.block_info(block_info)` to load a specific block.
@@ -43,8 +34,8 @@ impl RuntimeLoader {
     /// let block_info = loader.provider.block_info_by_number(1).await?;
     /// let runtime_config = loader.load().block_info(block_info).await?;
     /// ```
-    pub fn load(&mut self) -> RuntimeLoaderCall {
-        RuntimeLoaderCall::new(self.provider.clone(), self.config.clone())
+    pub fn load(&mut self) -> RuntimeCall {
+        RuntimeCall::new(self.provider.clone(), self.config.clone())
     }
 }
 

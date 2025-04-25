@@ -1,11 +1,21 @@
+//! Calling module
+
 use alloy_primitives::{Address, B256, b256};
 use alloy_provider::Provider;
+use futures::FutureExt;
 use kona_derive::traits::ChainProvider;
 use kona_genesis::RollupConfig;
 use kona_protocol::BlockInfo;
 use kona_providers_alloy::AlloyChainProvider;
 use kona_rpc::ProtocolVersion;
-use std::{future::Future, pin::Pin, sync::Arc, task::{Context, Poll}};
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
+use crate::{RuntimeCallError, RuntimeConfig};
 
 /// The storage slot that the unsafe block signer address is stored at.
 /// Computed as: `bytes32(uint256(keccak256("systemconfig.unsafeblocksigner")) - 1)`
@@ -26,7 +36,7 @@ const RECOMMENDED_PROTOCOL_VERSION_STORAGE_SLOT: B256 =
 /// This struct owns the loading functionality and provides a way to optionally specify
 /// a block info for the load operation.
 #[derive(Debug)]
-pub struct RuntimeLoaderCall {
+pub struct RuntimeCall {
     /// The L1 provider
     provider: AlloyChainProvider,
     /// The rollup config
@@ -58,15 +68,10 @@ enum LoadState {
     Done,
 }
 
-impl RuntimeLoaderCall {
+impl RuntimeCall {
     /// Creates a new RuntimeLoaderCall
     pub fn new(provider: AlloyChainProvider, config: Arc<RollupConfig>) -> Self {
-        Self {
-            provider,
-            config,
-            block_info: None,
-            state: LoadState::Init,
-        }
+        Self { provider, config, block_info: None, state: LoadState::Init }
     }
 
     /// Sets the block info to use for loading
@@ -76,8 +81,8 @@ impl RuntimeLoaderCall {
     }
 }
 
-impl Future for RuntimeLoaderCall {
-    type Output = Result<RuntimeConfig, RuntimeLoaderError>;
+impl Future for RuntimeCall {
+    type Output = Result<RuntimeConfig, RuntimeCallError>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         loop {
@@ -94,7 +99,7 @@ impl Future for RuntimeLoaderCall {
                 LoadState::GettingLatestBlock => {
                     let fut = self.provider.latest_block_number();
                     futures::pin_mut!(fut);
-                    match fut.poll(cx) {
+                    match fut.poll_unpin(cx) {
                         Poll::Ready(Ok(block_num)) => {
                             self.state = LoadState::GettingBlockInfo(block_num);
                         }
@@ -121,12 +126,12 @@ impl Future for RuntimeLoaderCall {
                     match fut.poll(cx) {
                         Poll::Ready(Ok(Some(block))) => {
                             if block.header.hash != block_info.hash {
-                                return Poll::Ready(Err(RuntimeLoaderError::BlockHashMismatch));
+                                return Poll::Ready(Err(RuntimeCallError::BlockHashMismatch));
                             }
                             self.state = LoadState::GettingUnsafeBlockSigner(block_info);
                         }
                         Poll::Ready(Ok(None)) => {
-                            return Poll::Ready(Err(RuntimeLoaderError::BlockNotFound));
+                            return Poll::Ready(Err(RuntimeCallError::BlockNotFound));
                         }
                         Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                         Poll::Pending => return Poll::Pending,
@@ -134,24 +139,36 @@ impl Future for RuntimeLoaderCall {
                 }
 
                 LoadState::GettingUnsafeBlockSigner(block_info) => {
-                    let fut = self.provider.inner.get_storage_at(
-                        self.config.l1_system_config_address,
-                        UNSAFE_BLOCK_SIGNER_ADDRESS_STORAGE_SLOT.into(),
-                    ).hash(block_info.hash);
+                    let fut = self
+                        .provider
+                        .inner
+                        .get_storage_at(
+                            self.config.l1_system_config_address,
+                            UNSAFE_BLOCK_SIGNER_ADDRESS_STORAGE_SLOT.into(),
+                        )
+                        .hash(block_info.hash);
                     futures::pin_mut!(fut);
-                    match fut.poll(cx) {
+                    match fut.poll_unpin(cx) {
                         Poll::Ready(Ok(storage)) => {
-                            let unsafe_block_signer = Address::from_slice(&storage.to_be_bytes_vec()[12..]);
+                            let unsafe_block_signer =
+                                Address::from_slice(&storage.to_be_bytes_vec()[12..]);
                             if self.config.protocol_versions_address == Address::ZERO {
                                 // If protocol versions address is not set, return default config
                                 let config = RuntimeConfig {
                                     unsafe_block_signer_address: unsafe_block_signer,
-                                    required_protocol_version: ProtocolVersion::V0(Default::default()),
-                                    recommended_protocol_version: ProtocolVersion::V0(Default::default()),
+                                    required_protocol_version: ProtocolVersion::V0(
+                                        Default::default(),
+                                    ),
+                                    recommended_protocol_version: ProtocolVersion::V0(
+                                        Default::default(),
+                                    ),
                                 };
                                 return Poll::Ready(Ok(config));
                             }
-                            self.state = LoadState::GettingRequiredProtocolVersion(block_info, unsafe_block_signer);
+                            self.state = LoadState::GettingRequiredProtocolVersion(
+                                block_info,
+                                unsafe_block_signer,
+                            );
                         }
                         Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                         Poll::Pending => return Poll::Pending,
@@ -159,50 +176,58 @@ impl Future for RuntimeLoaderCall {
                 }
 
                 LoadState::GettingRequiredProtocolVersion(block_info, unsafe_block_signer) => {
-                    let fut = self.provider.inner.get_storage_at(
-                        self.config.protocol_versions_address,
-                        REQUIRED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
-                    ).hash(block_info.hash);
+                    let fut = self
+                        .provider
+                        .inner
+                        .get_storage_at(
+                            self.config.protocol_versions_address,
+                            REQUIRED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
+                        )
+                        .hash(block_info.hash);
                     futures::pin_mut!(fut);
-                    match fut.poll(cx) {
-                        Poll::Ready(Ok(storage)) => {
-                            match ProtocolVersion::decode(storage.into()) {
-                                Ok(required_version) => {
-                                    self.state = LoadState::GettingRecommendedProtocolVersion(
-                                        block_info,
-                                        unsafe_block_signer,
-                                        required_version,
-                                    );
-                                }
-                                Err(e) => return Poll::Ready(Err(e.into())),
+                    match fut.poll_unpin(cx) {
+                        Poll::Ready(Ok(storage)) => match ProtocolVersion::decode(storage.into()) {
+                            Ok(required_version) => {
+                                self.state = LoadState::GettingRecommendedProtocolVersion(
+                                    block_info,
+                                    unsafe_block_signer,
+                                    required_version,
+                                );
                             }
-                        }
+                            Err(e) => return Poll::Ready(Err(e.into())),
+                        },
                         Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                         Poll::Pending => return Poll::Pending,
                     }
                 }
 
-                LoadState::GettingRecommendedProtocolVersion(block_info, unsafe_block_signer, required_version) => {
-                    let fut = self.provider.inner.get_storage_at(
-                        self.config.protocol_versions_address,
-                        RECOMMENDED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
-                    ).hash(block_info.hash);
+                LoadState::GettingRecommendedProtocolVersion(
+                    block_info,
+                    unsafe_block_signer,
+                    required_version,
+                ) => {
+                    let fut = self
+                        .provider
+                        .inner
+                        .get_storage_at(
+                            self.config.protocol_versions_address,
+                            RECOMMENDED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
+                        )
+                        .hash(block_info.hash);
                     futures::pin_mut!(fut);
-                    match fut.poll(cx) {
-                        Poll::Ready(Ok(storage)) => {
-                            match ProtocolVersion::decode(storage.into()) {
-                                Ok(recommended_version) => {
-                                    let config = RuntimeConfig {
-                                        unsafe_block_signer_address: unsafe_block_signer,
-                                        required_protocol_version: required_version,
-                                        recommended_protocol_version: recommended_version,
-                                    };
-                                    self.state = LoadState::Done;
-                                    return Poll::Ready(Ok(config));
-                                }
-                                Err(e) => return Poll::Ready(Err(e.into())),
+                    match fut.poll_unpin(cx) {
+                        Poll::Ready(Ok(storage)) => match ProtocolVersion::decode(storage.into()) {
+                            Ok(recommended_version) => {
+                                let config = RuntimeConfig {
+                                    unsafe_block_signer_address: unsafe_block_signer,
+                                    required_protocol_version: required_version,
+                                    recommended_protocol_version: recommended_version,
+                                };
+                                self.state = LoadState::Done;
+                                return Poll::Ready(Ok(config));
                             }
-                        }
+                            Err(e) => return Poll::Ready(Err(e.into())),
+                        },
                         Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
                         Poll::Pending => return Poll::Pending,
                     }

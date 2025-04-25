@@ -11,4 +11,4 @@
 extern crate tracing;
 
 mod runtime;
-pub use runtime::{RuntimeConfig, RuntimeLoader, RuntimeLoaderError};
+pub use runtime::{RuntimeCall, RuntimeCallError, RuntimeConfig, RuntimeLoader};

@@ -5,7 +5,7 @@ use kona_rpc::ProtocolVersionError;
 
 /// Error type for the runtime loader.
 #[derive(thiserror::Error, Debug)]
-pub enum RuntimeLoaderError {
+pub enum RuntimeCallError {
     /// Transport error
     #[error(transparent)]
     Transport(#[from] RpcError<TransportErrorKind>),
