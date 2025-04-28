@@ -114,6 +114,7 @@ impl Discv5Driver {
                 info!(target: "discovery", "Retrying discovery startup...");
                 continue;
             }
+            debug!(target: "discovery", "Local Enr: {:?}", self.disc.local_enr());
             break;
         }
     }
