@@ -1,8 +1,5 @@
 //! Network driver module.
 
-mod broadcast;
-pub use broadcast::Broadcast;
-
 mod error;
 pub use error::NetworkBuilderError;
 

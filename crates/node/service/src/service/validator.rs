@@ -1,7 +1,7 @@
 //! [ValidatorNodeService] trait.
 
 use crate::{
-    DerivationActor, EngineActor, EngineLauncher, NetworkActor, NodeActor, RpcActor,
+    DerivationActor, EngineActor, EngineLauncher, GossipActor, NodeActor, RpcActor,
     RuntimeLauncher, service::spawn_and_wait,
 };
 use alloy_primitives::Address;
@@ -89,8 +89,11 @@ pub trait ValidatorNodeService {
         &self,
     ) -> Result<(L2ForkchoiceState, Self::DerivationPipeline), Self::Error>;
 
-    /// Creates a new instance of the [`Network`].
-    async fn init_network(&self) -> Result<Option<(Network, NetworkRpc)>, Self::Error>;
+    /// Creates a new instance of the [`kona_disc::Discv5Driver`].
+    fn discovery(&self) -> Result<Option<kona_disc::Discv5Driver>, Self::Error>;
+
+    /// Creates a new instance of the [`kona_gossip::Driver`].
+    fn gossip(&self) -> Result<Option<kona_gossip::Driver>, Self::Error>;
 
     /// Returns the [`RuntimeLauncher`] for the node.
     fn runtime(&self) -> RuntimeLauncher;

@@ -15,8 +15,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use kona_derive::traits::ChainProvider;
+use kona_discovery::Config as DiscoveryConfig;
 use kona_genesis::RollupConfig;
-use kona_p2p::{Config, Network, NetworkBuilder};
+use kona_gossip::Config as GossipConfig;
 use kona_protocol::BlockInfo;
 use kona_providers_alloy::{
     AlloyChainProvider, AlloyL2ChainProvider, OnlineBeaconClient, OnlineBlobProvider,
@@ -45,8 +46,10 @@ pub struct RollupNode {
     pub(crate) engine_launcher: EngineLauncher,
     /// The [`RpcLauncher`] for the node.
     pub(crate) rpc_launcher: RpcLauncher,
-    /// The P2P [`Config`] for the node.
-    pub(crate) p2p_config: Option<Config>,
+    /// The [`GossipConfig`] for the node.
+    pub(crate) gossip_config: Option<GossipConfig>,
+    /// The [`DiscoveryConfig`] for the node.
+    pub(crate) discovery_config: Option<DiscoveryConfig>,
     /// Whether p2p networking is entirely disabled.
     pub(crate) network_disabled: bool,
     /// The [`RuntimeLauncher`] for the runtime loading service.
@@ -113,25 +116,34 @@ impl ValidatorNodeService for RollupNode {
         self.rpc_launcher.clone()
     }
 
-    async fn init_network(&self) -> Result<Option<(Network, NetworkRpc)>, Self::Error> {
+    fn discovery(&self) -> Result<Option<Discv5Driver>, Self::Error> {
         if self.network_disabled {
             return Ok(None);
         }
-        let Some(ref p2p_config) = self.p2p_config else {
+        let Some(ref config) = self.discovery_config else {
             warn!(
                 target: "rollup_node",
-                "No network configuration provided, skipping network initialization"
+                "No discovery configuration provided, skipping discovery initialization"
             );
-            return Ok(None);
+            return Ok(Discv5Driver::default());
         };
-        let (tx, rx) = tokio::sync::mpsc::channel(1024);
-        let p2p_module = NetworkRpc::new(tx);
-        let builder = NetworkBuilder::from(p2p_config.clone())
-            .with_rollup_config((*self.config).clone())
-            .with_rpc_receiver(rx)
-            .build()
-            .map_err(RollupNodeError::Network)?;
-        Ok(Some((builder, p2p_module)))
+        let driver = kona_disc::Discv5Builder::from(config.clone()).build()?;
+        Ok(Some(driver))
+    }
+
+    fn gossip(&self) -> Result<Option<kona_gossip::Driver>, Self::Error> {
+        if self.network_disabled {
+            return Ok(None);
+        }
+        let Some(ref config) = self.gossip_config else {
+            warn!(
+                target: "rollup_node",
+                "No gossip configuration provided, skipping gossip initialization"
+            );
+            return Ok(kona_gossip::Driver::default());
+        };
+        let driver = kona_gossip::Builder::from(config.clone()).build()?;
+        Ok(Some(driver))
     }
 
     async fn init_derivation(&self) -> Result<(L2ForkchoiceState, OnlinePipeline), Self::Error> {

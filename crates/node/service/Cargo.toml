@@ -13,14 +13,16 @@ workspace = true
 
 [dependencies]
 # workspace
+kona-rpc.workspace = true
 kona-p2p.workspace = true
+kona-disc.workspace = true
+kona-gossip.workspace = true
 kona-engine.workspace = true
 kona-sources.workspace = true
 kona-genesis.workspace = true
 kona-derive.workspace = true
 kona-protocol.workspace = true
 kona-providers-alloy.workspace = true
-kona-rpc.workspace = true
 
 # alloy
 alloy-primitives.workspace = true
@@ -38,6 +40,7 @@ op-alloy-rpc-types-engine = { workspace = true, features = ["std"] }
 op-alloy-provider.workspace = true
 
 # general
+discv5.workspace = true
 url.workspace = true
 libp2p.workspace = true
 futures.workspace = true
@@ -53,4 +56,4 @@ http-body-util.workspace = true
 
 [features]
 default = []
-metrics = ["kona-p2p/metrics"]
+metrics = []

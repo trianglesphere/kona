@@ -35,8 +35,10 @@ pub struct RollupNodeBuilder {
     l2_provider_rpc_url: Option<Url>,
     /// The JWT secret.
     jwt_secret: Option<JwtSecret>,
-    /// The [`Config`].
-    p2p_config: Option<Config>,
+    /// The [`kona_gossip::Config`].
+    gossip_config: Option<kona_gossip::Config>,
+    /// The [`kona_disc::Config`].
+    discovery_config: Option<kona_disc::Config>,
     /// An RPC Configuration.
     rpc_config: Option<RpcConfig>,
     /// An interval to load the runtime config.
@@ -83,9 +85,14 @@ impl RollupNodeBuilder {
         Self { jwt_secret: Some(jwt_secret), ..self }
     }
 
-    /// Appends the P2P [`Config`] to the builder.
-    pub fn with_p2p_config(self, config: Config) -> Self {
-        Self { p2p_config: Some(config), ..self }
+    /// Appends the discovery [`kona_disc::Config`] to the builder.
+    pub fn with_discovery_config(self, config: Config) -> Self {
+        Self { discovery_config: Some(config), ..self }
+    }
+
+    /// Appends the gossip [`kona_gossip::Config`] to the builder.
+    pub fn with_gossip_config(self, config: Config) -> Self {
+        Self { gossip_config: Some(config), ..self }
     }
 
     /// Sets the [`RpcConfig`] on the [`RollupNodeBuilder`].
@@ -156,7 +163,8 @@ impl RollupNodeBuilder {
             l2_provider,
             engine_launcher,
             rpc_launcher,
-            p2p_config: self.p2p_config,
+            gossip_config: self.gossip_config,
+            discovery_config: self.discovery_config,
             network_disabled: self.network_disabled,
             runtime_launcher,
         }

@@ -7,6 +7,7 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+kona-disc.workspace = true
 tracing.workspace = true
 kona-cli.workspace = true
 kona-p2p.workspace = true

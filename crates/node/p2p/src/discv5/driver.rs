@@ -10,10 +10,9 @@ use tokio::{
     time::{Duration, sleep},
 };
 
-use crate::{
-    BootNode, BootNodes, BootStore, Discv5Builder, Discv5Handler, EnrValidation, HandlerRequest,
-    enr_to_multiaddr,
-};
+use kona_peers::{BootNode, BootNodes, BootStore, EnrValidation, enr_to_multiaddr};
+
+use crate::{Discv5Builder, Discv5Handler, HandlerRequest};
 
 /// The [`Discv5Driver`] drives the discovery service.
 ///
@@ -471,7 +470,7 @@ impl Discv5Driver {
 
 #[cfg(test)]
 mod tests {
-    use crate::{BootNodes, discv5::builder::LocalNode};
+    use crate::discv5::builder::LocalNode;
     use discv5::{
         ConfigBuilder,
         enr::{CombinedKey, CombinedPublicKey},

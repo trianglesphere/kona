@@ -20,7 +20,7 @@
 use clap::{ArgAction, Parser};
 use discv5::enr::CombinedKey;
 use kona_cli::init_tracing_subscriber;
-use kona_p2p::{Discv5Builder, LocalNode};
+use kona_disc::{Discv5Builder, LocalNode};
 use std::net::{IpAddr, Ipv4Addr};
 
 /// The discovery command.

@@ -1,0 +1,46 @@
+[package]
+name = "kona-disc"
+version = "0.1.0"
+description = "Discovery library for the OP Stack"
+
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Kona
+kona-peers.workspace = true
+kona-macros.workspace = true
+
+# Alloy
+alloy-rlp.workspace = true
+
+# Networking
+libp2p.workspace = true
+discv5 = { workspace = true, features = ["libp2p"] }
+
+# Misc
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+rand = { workspace = true, features = ["thread_rng"] }
+derive_more = { workspace = true, features = ["display", "deref", "debug"] }
+
+# `metrics` feature
+metrics = { workspace = true, optional = true }
+
+[dev-dependencies]
+kona-cli.workspace = true
+kona-genesis.workspace = true
+
+[features]
+default = []
+metrics = ["dep:metrics", "libp2p/metrics"]

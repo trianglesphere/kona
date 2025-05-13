@@ -5,6 +5,12 @@
 mod traits;
 pub use traits::NodeActor;
 
+mod discovery;
+pub use discovery::{DiscoveryActor, DiscoveryActorError};
+
+mod gossip;
+pub use gossip::{GossipActor, GossipActorError};
+
 mod runtime;
 pub use runtime::{RuntimeActor, RuntimeLauncher};
 

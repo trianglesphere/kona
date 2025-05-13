@@ -151,7 +151,9 @@ impl NodeCommand {
 
         self.p2p_flags.check_ports()?;
         let disabled = self.p2p_flags.disabled;
-        let p2p_config = self.p2p_flags.config(&cfg, args, Some(self.l1_eth_rpc.clone())).await?;
+        let discovery_config = self.p2p_flags.discovery_config(args)?;
+        let gossip_config =
+            self.p2p_flags.gossip_config(&cfg, args, Some(self.l1_eth_rpc.clone())).await?;
         let rpc_config = self.rpc_flags.into();
 
         let runtime_interval =
@@ -164,8 +166,9 @@ impl NodeCommand {
             .with_l2_provider_rpc_url(self.l2_provider_rpc)
             .with_l2_engine_rpc_url(self.l2_engine_rpc)
             .with_runtime_load_interval(runtime_interval)
-            .with_p2p_config(p2p_config)
             .with_network_disabled(disabled)
+            .with_discovery_config(discovery_config)
+            .with_gossip_config(gossip_config)
             .with_rpc_config(rpc_config)
             .build()
             .start()

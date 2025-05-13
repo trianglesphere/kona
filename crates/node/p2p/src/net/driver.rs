@@ -10,7 +10,10 @@ use tokio::{
     time::Duration,
 };
 
-use crate::{Broadcast, Discv5Driver, GossipDriver, HandlerRequest, NetworkBuilder, P2pRpcRequest};
+use kona_disc::{Discv5Driver, HandlerRequest};
+use kona_gossip::{Broadcast, Driver};
+
+use crate::{NetworkBuilder, P2pRpcRequest};
 
 /// Network
 ///
@@ -32,7 +35,7 @@ pub struct Network {
     /// A channel to publish an unsafe block.
     pub(crate) publish_rx: Option<tokio::sync::mpsc::Receiver<OpNetworkPayloadEnvelope>>,
     /// The swarm instance.
-    pub gossip: GossipDriver,
+    pub gossip: Driver,
     /// The discovery service driver.
     pub discovery: Discv5Driver,
 }
@@ -80,7 +83,7 @@ impl Network {
                             continue;
                         };
                         let timestamp = block.payload.timestamp();
-                        let selector = |handler: &crate::BlockHandler| {
+                        let selector = |handler: &kona_gossip::BlockHandler<kona_gossip::BlockValidator>| {
                             handler.topic(timestamp)
                         };
                         match self.gossip.publish(selector, Some(block)) {
@@ -89,7 +92,6 @@ impl Network {
                         }
                     }
                     event = self.gossip.select_next_some() => {
-                        kona_macros::inc!(gauge, crate::Metrics::GOSSIP_EVENT, "total", "total");
                         if let Some(payload) = self.gossip.handle_event(event) {
                             broadcast.push(payload);
                         }
@@ -100,7 +102,6 @@ impl Network {
                             continue;
                         };
                         self.gossip.dial(enr);
-                        kona_macros::inc!(gauge, crate::Metrics::DIAL_PEER);
                     },
 
                     _ = peer_score_inspector.tick(), if self.gossip.peer_monitoring.as_ref().is_some() => {

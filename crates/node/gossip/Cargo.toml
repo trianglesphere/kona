@@ -1,0 +1,68 @@
+[package]
+name = "kona-gossip"
+version = "0.1.0"
+description = "Gossip library for the OP Stack"
+
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Kona
+kona-peers.workspace = true
+kona-macros.workspace = true
+kona-genesis.workspace = true
+
+# Alloy
+alloy-primitives.workspace = true
+alloy-rpc-types-engine.workspace = true
+alloy-consensus = { workspace = true, features = ["k256"] }
+
+# OP Alloy
+op-alloy-consensus = { workspace = true, features = ["k256"] }
+op-alloy-rpc-types-engine.workspace = true
+
+# Networking
+snap.workspace = true
+futures.workspace = true
+discv5 = { workspace = true, features = ["libp2p"] }
+openssl = { workspace = true, features = ["vendored"] }
+libp2p = { workspace = true, features = ["macros", "tokio", "tcp", "noise", "gossipsub", "ping", "yamux", "identify"] }
+
+# Misc
+tokio.workspace = true
+tracing.workspace = true
+lazy_static.workspace = true
+thiserror.workspace = true
+derive_more = { workspace = true, features = ["display", "deref", "debug"] }
+
+# `metrics` feature
+metrics = { workspace = true, optional = true }
+
+[dev-dependencies]
+arbtest.workspace = true
+alloy-rlp.workspace = true
+tempfile.workspace = true
+kona-cli.workspace = true
+multihash.workspace = true
+alloy-eips.workspace = true
+
+rand = { workspace = true, features = ["thread_rng"] }
+arbitrary = { workspace = true, features = ["derive"] }
+alloy-primitives = { workspace = true, features = ["arbitrary"] }
+alloy-rpc-types-engine = { workspace = true, features = ["std"] }
+alloy-consensus = { workspace = true, features = ["arbitrary", "k256"] }
+op-alloy-consensus = { workspace = true, features = ["arbitrary", "k256"] }
+
+[features]
+default = []
+metrics = ["dep:metrics", "libp2p/metrics"]
+# arbitrary = ["dep:arbitrary", "alloy-primitives/arbitrary"]

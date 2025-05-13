@@ -9,8 +9,10 @@ use alloy_primitives::B256;
 use anyhow::Result;
 use clap::Parser;
 use discv5::{Enr, enr::k256};
+use kona_disc::LocalNode;
 use kona_genesis::RollupConfig;
-use kona_p2p::{Config, LocalNode, PeerMonitoring, PeerScoreLevel};
+use kona_p2p::Config;
+use kona_peers::{PeerMonitoring, PeerScoreLevel};
 use kona_sources::RuntimeLoader;
 use libp2p::identity::Keypair;
 use std::{
@@ -301,22 +303,54 @@ impl P2PArgs {
         })
     }
 
-    /// Constructs kona's P2P network [`Config`] from CLI arguments.
-    ///
-    /// ## Parameters
-    ///
-    /// - [`GlobalArgs`]: required to fetch the genesis unsafe block signer.
-    ///
-    /// Errors if the genesis unsafe block signer isn't available for the specified L2 Chain ID.
-    pub async fn config(
-        self,
+    /// Constructs a discovery service config from the CLI arguments.
+    pub fn discovery_config(&self, args: &GlobalArgs) -> anyhow::Result<kona_disc::Config> {
+        kona_disc::Config {
+            discovery_config: self.discv5_config(),
+            discovery_address: self.local_node()?,
+            discovery_interval: Duration::from_secs(self.discovery_interval),
+            discovery_randomize: self.discovery_randomize.map(Duration::from_secs),
+            bootstore: self.bootstore.clone(),
+            bootnodes: self.bootnodes.clone(),
+            l2_chain_id: args.l2_chain_id,
+        }
+    }
+
+    //// Constructs a gossip service config from the CLI arguments.
+    pub async fn gossip_config(
+        &self,
         config: &RollupConfig,
         args: &GlobalArgs,
         l1_rpc: Option<Url>,
-    ) -> anyhow::Result<Config> {
-        // Note: the advertised address is contained in the ENR for external peers from the
-        // discovery layer to use.
+    ) -> anyhow::Result<kona_gossip::Config> {
+        let mut gossip_address = libp2p::Multiaddr::from(self.listen_ip);
+        gossip_address.push(libp2p::multiaddr::Protocol::Tcp(self.listen_tcp_port));
+        let gossip_config = kona_gossip::Config::default_config_builder()
+            .mesh_n(self.gossip_mesh_d)
+            .mesh_n_low(self.gossip_mesh_dlo)
+            .mesh_n_high(self.gossip_mesh_dhi)
+            .gossip_lazy(self.gossip_mesh_dlazy)
+            .flood_publish(self.gossip_flood_publish)
+            .build()?;
+        let monitor_peers = self.ban_enabled.then(|| PeerMonitoring {
+            ban_duration: Duration::from_secs(self.ban_duration.into()),
+            ban_threshold: self.ban_threshold as f64,
+        });
+        kona_gossip::Config {
+            gossip_address,
+            unsafe_block_signer: self.unsafe_block_signer(config, args, l1_rpc).await?,
+            keypair: self.keypair()?,
+            gossip_config,
+            scoring: self.scoring,
+            monitor_peers,
+            block_time: config.block_time,
+            redial: self.peer_redial,
+            rollup_config: config.clone(),
+        }
+    }
 
+    /// Returns the `LocalNode` from the CLI arguments.
+    pub fn local_node(&self) -> anyhow::Result<LocalNode> {
         // Fallback to the listen ip if the advertise ip is not specified
         let advertise_ip = self.advertise_ip.unwrap_or(self.listen_ip);
 
@@ -336,57 +370,14 @@ impl P2PArgs {
             self.listen_udp_port
         };
 
-        let keypair = self.keypair().unwrap_or_else(|_| Keypair::generate_secp256k1());
+        let keypair = self.keypair()?;
         let secp256k1_key = keypair.clone().try_into_secp256k1()
             .map_err(|e| anyhow::anyhow!("Impossible to convert keypair to secp256k1. This is a bug since we only support secp256k1 keys: {e}"))?
             .secret().to_bytes();
         let local_node_key = k256::ecdsa::SigningKey::from_bytes(&secp256k1_key.into())
             .map_err(|e| anyhow::anyhow!("Impossible to convert keypair to k256 signing key. This is a bug since we only support secp256k1 keys: {e}"))?;
 
-        let discovery_address =
-            LocalNode::new(local_node_key, advertise_ip, advertise_tcp_port, advertise_udp_port);
-        let gossip_config = kona_p2p::default_config_builder()
-            .mesh_n(self.gossip_mesh_d)
-            .mesh_n_low(self.gossip_mesh_dlo)
-            .mesh_n_high(self.gossip_mesh_dhi)
-            .gossip_lazy(self.gossip_mesh_dlazy)
-            .flood_publish(self.gossip_flood_publish)
-            .build()?;
-        let block_time = config.block_time;
-
-        let monitor_peers = if self.ban_enabled {
-            Some(PeerMonitoring {
-                ban_duration: Duration::from_secs(self.ban_duration.into()),
-                ban_threshold: self.ban_threshold as f64,
-            })
-        } else {
-            None
-        };
-
-        let discovery_listening_address = SocketAddr::new(self.listen_ip, self.listen_udp_port);
-        let discovery_config = self.discv5_config(discovery_listening_address.into(), static_ip);
-
-        let mut gossip_address = libp2p::Multiaddr::from(self.listen_ip);
-        gossip_address.push(libp2p::multiaddr::Protocol::Tcp(self.listen_tcp_port));
-
-        Ok(Config {
-            discovery_config,
-            discovery_interval: Duration::from_secs(self.discovery_interval),
-            discovery_address,
-            discovery_randomize: self.discovery_randomize.map(Duration::from_secs),
-            gossip_address,
-            keypair,
-            unsafe_block_signer: self.unsafe_block_signer(config, args, l1_rpc).await?,
-            gossip_config,
-            scoring: self.scoring,
-            block_time,
-            monitor_peers,
-            bootstore: self.bootstore,
-            topic_scoring: self.topic_scoring,
-            redial: self.peer_redial,
-            bootnodes: self.bootnodes,
-            rollup_config: config.clone(),
-        })
+        LocalNode::new(local_node_key, advertise_ip, advertise_tcp_port, advertise_udp_port)
     }
 
     /// Returns the [Keypair] from the cli inputs.
@@ -399,14 +390,15 @@ impl P2PArgs {
     pub fn keypair(&self) -> Result<Keypair> {
         // Attempt the parse the private key if specified.
         if let Some(mut private_key) = self.private_key {
-            return kona_p2p::parse_key(&mut private_key.0).map_err(|e| anyhow::anyhow!(e));
+            return kona_cli::SecretKeyLoader::parse(&mut private_key.0)
+                .map_err(|e| anyhow::anyhow!(e));
         }
 
         let Some(ref key_path) = self.priv_path else {
             anyhow::bail!("Neither a raw private key nor a private key file path was provided.");
         };
 
-        kona_p2p::get_keypair(key_path).map_err(|e| anyhow::anyhow!(e))
+        kona_cli::SecretKeyLoader::load(key_path).map_err(|e| anyhow::anyhow!(e))
     }
 }
 

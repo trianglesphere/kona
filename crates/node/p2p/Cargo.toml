@@ -17,49 +17,28 @@ workspace = true
 
 [dependencies]
 # Kona
-kona-macros.workspace = true
+kona-disc.workspace = true
+kona-peers.workspace = true
+kona-gossip.workspace = true
 kona-genesis.workspace = true
 
 # Alloy
-alloy-rlp.workspace = true
 alloy-primitives = { workspace = true, features = ["k256", "getrandom"] }
-alloy-rpc-types-engine.workspace = true
-alloy-consensus.workspace = true
 
 # Op Alloy
-op-alloy-consensus = { workspace = true, features = ["k256"] }
 op-alloy-rpc-types-engine = { workspace = true, features = ["std"] }
 
 # Networking
-snap.workspace = true
-futures.workspace = true
 discv5 = { workspace = true, features = ["libp2p"] }
-libp2p-identity = { workspace = true, features = ["secp256k1"] }
 libp2p = { workspace = true, features = ["macros", "tokio", "tcp", "noise", "gossipsub", "ping", "yamux", "identify"] }
-openssl = { workspace = true, features = ["vendored"] }
-
-# Cryptography
-secp256k1.workspace = true
 
 # Misc
 backon.workspace = true
-url.workspace = true
-dirs.workspace = true
 serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-lazy_static.workspace = true
-unsigned-varint.workspace = true
-rand = { workspace = true, features = ["thread_rng"] }
-serde_json = { workspace = true, features = ["alloc"] }
 derive_more = { workspace = true, features = ["display", "deref", "debug"] }
-
-# `arbitrary` feature dependencies
-arbitrary = { workspace = true, features = ["derive"], optional = true }
-
-# `metrics` feature
-metrics = { workspace = true, optional = true }
 
 [dev-dependencies]
 arbtest.workspace = true
@@ -68,8 +47,9 @@ kona-cli.workspace = true
 multihash.workspace = true
 alloy-eips.workspace = true
 
+libp2p-identity = { workspace = true, features = ["secp256k1"] }
+serde_json = { workspace = true, features = ["alloc"] }
 rand = { workspace = true, features = ["thread_rng"] }
-arbitrary = { workspace = true, features = ["derive"] }
 alloy-primitives = { workspace = true, features = ["arbitrary"] }
 alloy-rpc-types-engine = { workspace = true, features = ["std"] }
 alloy-consensus = { workspace = true, features = ["arbitrary", "k256"] }
@@ -77,5 +57,3 @@ op-alloy-consensus = { workspace = true, features = ["arbitrary", "k256"] }
 
 [features]
 default = []
-metrics = ["dep:metrics", "libp2p/metrics"]
-arbitrary = ["dep:arbitrary", "alloy-primitives/arbitrary"]
