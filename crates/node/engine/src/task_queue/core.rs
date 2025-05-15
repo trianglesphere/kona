@@ -1,17 +1,14 @@
 //! The [`Engine`] is a task queue that receives and executes [`EngineTask`]s.
 
 use super::{EngineTaskError, EngineTaskExt};
-use crate::{EngineClient, EngineState, EngineTask, EngineTaskType, ForkchoiceTask};
+use crate::{EngineClient, EngineState, EngineTask};
 use alloy_provider::Provider;
 use alloy_rpc_types_eth::Transaction;
 use kona_genesis::{RollupConfig, SystemConfig};
 use kona_protocol::{BlockInfo, L2BlockInfo, OpBlockConversionError, to_system_config};
 use kona_sources::{SyncStartError, find_starting_forkchoice};
 use op_alloy_consensus::OpTxEnvelope;
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::VecDeque, sync::Arc};
 use thiserror::Error;
 use tokio::sync::watch::Sender;
 
@@ -31,9 +28,7 @@ pub struct Engine {
     /// A sender that can be used to notify the engine actor of state changes.
     state_sender: Sender<EngineState>,
     /// The task queue.
-    tasks: HashMap<EngineTaskType, VecDeque<EngineTask>>,
-    /// The current task being executed.
-    cursor: EngineTaskType,
+    tasks: VecDeque<EngineTask>,
 }
 
 impl Engine {
@@ -41,13 +36,13 @@ impl Engine {
     ///
     /// An initial [`EngineTask::ForkchoiceUpdate`] is added to the task queue to synchronize the
     /// engine with the forkchoice state of the [`EngineState`].
-    pub fn new(initial_state: EngineState, state_sender: Sender<EngineState>) -> Self {
-        Self {
-            state: initial_state,
-            tasks: HashMap::new(),
-            cursor: EngineTaskType::ForkchoiceUpdate,
-            state_sender,
-        }
+    pub const fn new(initial_state: EngineState, state_sender: Sender<EngineState>) -> Self {
+        Self { state: initial_state, tasks: VecDeque::new(), state_sender }
+    }
+
+    /// Returns true if the inner [`EngineState`] is uninitialized.
+    pub fn is_state_uninitialized(&self) -> bool {
+        self.state == EngineState::default()
     }
 
     /// Returns a reference to the inner [`EngineState`].
@@ -62,7 +57,7 @@ impl Engine {
 
     /// Enqueues a new [`EngineTask`] for execution.
     pub fn enqueue(&mut self, task: EngineTask) {
-        self.tasks.entry(task.ty()).or_default().push_back(task);
+        self.tasks.push_back(task);
     }
 
     /// Resets the engine by finding a plausible sync starting point via
@@ -73,6 +68,9 @@ impl Engine {
         client: Arc<EngineClient>,
         config: &RollupConfig,
     ) -> Result<(L2BlockInfo, BlockInfo, SystemConfig), EngineResetError> {
+        // Clear any outstanding tasks to prepare for the reset.
+        self.clear();
+
         let start =
             find_starting_forkchoice(config, client.l1_provider(), client.l2_provider()).await?;
 
@@ -82,8 +80,7 @@ impl Engine {
         self.state.set_safe_head(start.safe);
         self.state.set_finalized_head(start.finalized);
 
-        self.enqueue(EngineTask::ForkchoiceUpdate(ForkchoiceTask::new(client.clone())));
-
+        // Find the new safe head's L1 origin and SystemConfig.
         let origin_block =
             start.safe.l1_origin.number - config.channel_timeout(start.safe.block_info.timestamp);
         let l1_origin_info: BlockInfo = client
@@ -94,7 +91,6 @@ impl Engine {
             .ok_or(SyncStartError::BlockNotFound(origin_block.into()))?
             .into_consensus()
             .into();
-
         let l2_safe_block = client
             .l2_provider()
             .get_block(start.safe.block_info.hash.into())
@@ -114,20 +110,6 @@ impl Engine {
         self.tasks.clear();
     }
 
-    /// Returns the next task type to be executed.
-    pub fn next(&self) -> EngineTaskType {
-        let mut ty = self.cursor;
-        let task_len = self.tasks.len();
-        for _ in 0..task_len {
-            if !self.tasks.contains_key(&ty) {
-                ty = ty.next();
-            } else {
-                break;
-            }
-        }
-        ty
-    }
-
     /// Attempts to drain the queue by executing all [`EngineTask`]s in-order. If any task returns
     /// an error along the way, it is not popped from the queue (in case it must be retried) and
     /// the error is returned.
@@ -136,30 +118,18 @@ impl Engine {
     /// cleared.
     pub async fn drain(&mut self) -> Result<(), EngineTaskError> {
         loop {
-            let ty = self.next();
-            self.cursor = self.cursor.next();
-            let Some(task) = self.tasks.get(&ty) else {
+            let Some(task) = self.tasks.front() else {
                 return Ok(());
             };
-            let Some(task) = task.front() else {
-                return Ok(());
-            };
-            match task.execute(&mut self.state).await {
-                Ok(_) => {}
-                Err(EngineTaskError::Reset(e)) => {
-                    self.clear();
-                    return Err(EngineTaskError::Reset(e));
-                }
-                e => return e,
-            }
+
+            // Execute the task
+            task.execute(&mut self.state).await?;
 
             // Update the state and notify the engine actor.
             self.state_sender.send_replace(self.state);
 
-            let ty = task.ty();
-            if let Some(queue) = self.tasks.get_mut(&ty) {
-                queue.pop_front();
-            };
+            // Pop the task from the queue now that it's been executed.
+            self.tasks.pop_front();
         }
     }
 }
