@@ -2,6 +2,8 @@
 //!
 //! [`Engine`]: crate::Engine
 
+use std::sync::Arc;
+
 use super::{BuildTask, ConsolidateTask, ForkchoiceTask, InsertUnsafeTask};
 use crate::EngineState;
 use async_trait::async_trait;
@@ -115,14 +117,14 @@ pub trait EngineTaskExt {
 pub enum EngineTaskError {
     /// A temporary error within the engine.
     #[error("Temporary engine task error: {0}")]
-    Temporary(Box<dyn std::error::Error>),
+    Temporary(Arc<dyn std::error::Error + Send + Sync>),
     /// A critical error within the engine.
     #[error("Critical engine task error: {0}")]
-    Critical(Box<dyn std::error::Error>),
+    Critical(Arc<dyn std::error::Error + Send + Sync>),
     /// An error that requires a derivation pipeline reset.
     #[error("Derivation pipeline reset required: {0}")]
-    Reset(Box<dyn std::error::Error>),
+    Reset(Arc<dyn std::error::Error + Send + Sync>),
     /// An error that requires the derivation pipeline to be flushed.
     #[error("Derivation pipeline flush required: {0}")]
-    Flush(Box<dyn std::error::Error>),
+    Flush(Arc<dyn std::error::Error + Send + Sync>),
 }

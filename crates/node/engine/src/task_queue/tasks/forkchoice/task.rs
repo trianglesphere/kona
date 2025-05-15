@@ -14,12 +14,21 @@ use std::sync::Arc;
 pub struct ForkchoiceTask {
     /// The engine client.
     pub client: Arc<EngineClient>,
+    /// Whether or not to exclude `safe` and `finalized` hashes, to instruct `reth` to sync towards
+    /// the head block.
+    pub exclude_safe_and_finalized: bool,
 }
 
 impl ForkchoiceTask {
     /// Creates a new [`ForkchoiceTask`].
     pub const fn new(client: Arc<EngineClient>) -> Self {
-        Self { client }
+        Self { client, exclude_safe_and_finalized: false }
+    }
+
+    /// Excludes the `safe` and `finalized` hashes from the forkchoice update.
+    pub const fn exclude_safe_and_finalized(mut self) -> Self {
+        self.exclude_safe_and_finalized = true;
+        self
     }
 }
 
@@ -47,7 +56,13 @@ impl EngineTaskExt for ForkchoiceTask {
         }
 
         // Send the forkchoice update through the input.
-        let forkchoice = state.create_forkchoice_state();
+        let mut forkchoice = state.create_forkchoice_state();
+
+        if self.exclude_safe_and_finalized {
+            // Exclude the safe and finalized hashes from the forkchoice update.
+            forkchoice.safe_block_hash = Default::default();
+            forkchoice.finalized_block_hash = Default::default();
+        }
 
         // Handle the forkchoice update result.
         if let Err(e) = self.client.fork_choice_updated_v3(forkchoice, None).await {

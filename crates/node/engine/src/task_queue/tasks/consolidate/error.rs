@@ -1,5 +1,7 @@
 //! Contains error types for the [`crate::ConsolidateTask`].
 
+use std::sync::Arc;
+
 use crate::EngineTaskError;
 use thiserror::Error;
 
@@ -17,8 +19,8 @@ pub enum ConsolidateTaskError {
 impl From<ConsolidateTaskError> for EngineTaskError {
     fn from(value: ConsolidateTaskError) -> Self {
         match value {
-            ConsolidateTaskError::MissingUnsafeL2Block(_) => Self::Reset(Box::new(value)),
-            ConsolidateTaskError::FailedToFetchUnsafeL2Block => Self::Temporary(Box::new(value)),
+            ConsolidateTaskError::MissingUnsafeL2Block(_) => Self::Reset(Arc::new(value)),
+            ConsolidateTaskError::FailedToFetchUnsafeL2Block => Self::Temporary(Arc::new(value)),
         }
     }
 }

@@ -1,5 +1,7 @@
 //! Contains error types for the [crate::ForkchoiceTask].
 
+use std::sync::Arc;
+
 use crate::EngineTaskError;
 use alloy_rpc_types_engine::PayloadStatusEnum;
 use alloy_transport::{RpcError, TransportErrorKind};
@@ -50,18 +52,18 @@ pub enum BuildTaskError {
 impl From<BuildTaskError> for EngineTaskError {
     fn from(value: BuildTaskError) -> Self {
         match value {
-            BuildTaskError::NoForkchoiceUpdateNeeded => Self::Temporary(Box::new(value)),
-            BuildTaskError::EngineSyncing => Self::Temporary(Box::new(value)),
-            BuildTaskError::ForkchoiceUpdateFailed(_) => Self::Temporary(Box::new(value)),
-            BuildTaskError::MissingPayloadId => Self::Temporary(Box::new(value)),
-            BuildTaskError::UnexpectedPayloadStatus(_) => Self::Temporary(Box::new(value)),
-            BuildTaskError::GetPayloadFailed(_) => Self::Temporary(Box::new(value)),
-            BuildTaskError::NewPayloadFailed(_) => Self::Temporary(Box::new(value)),
-            BuildTaskError::InvalidForkchoiceState => Self::Reset(Box::new(value)),
-            BuildTaskError::HoloceneInvalidFlush => Self::Flush(Box::new(value)),
-            BuildTaskError::DepositOnlyPayloadReattemptFailed => Self::Critical(Box::new(value)),
-            BuildTaskError::FinalizedAheadOfUnsafe(_, _) => Self::Critical(Box::new(value)),
-            BuildTaskError::DepositOnlyPayloadFailed => Self::Critical(Box::new(value)),
+            BuildTaskError::NoForkchoiceUpdateNeeded => Self::Temporary(Arc::new(value)),
+            BuildTaskError::EngineSyncing => Self::Temporary(Arc::new(value)),
+            BuildTaskError::ForkchoiceUpdateFailed(_) => Self::Temporary(Arc::new(value)),
+            BuildTaskError::MissingPayloadId => Self::Temporary(Arc::new(value)),
+            BuildTaskError::UnexpectedPayloadStatus(_) => Self::Temporary(Arc::new(value)),
+            BuildTaskError::GetPayloadFailed(_) => Self::Temporary(Arc::new(value)),
+            BuildTaskError::NewPayloadFailed(_) => Self::Temporary(Arc::new(value)),
+            BuildTaskError::InvalidForkchoiceState => Self::Reset(Arc::new(value)),
+            BuildTaskError::HoloceneInvalidFlush => Self::Flush(Arc::new(value)),
+            BuildTaskError::DepositOnlyPayloadReattemptFailed => Self::Critical(Arc::new(value)),
+            BuildTaskError::FinalizedAheadOfUnsafe(_, _) => Self::Critical(Arc::new(value)),
+            BuildTaskError::DepositOnlyPayloadFailed => Self::Critical(Arc::new(value)),
         }
     }
 }

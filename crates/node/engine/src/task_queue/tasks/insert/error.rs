@@ -2,6 +2,8 @@
 //!
 //! [InsertUnsafeTask]: crate::InsertUnsafeTask
 
+use std::sync::Arc;
+
 use crate::EngineTaskError;
 use alloy_rpc_types_engine::PayloadStatusEnum;
 use alloy_transport::{RpcError, TransportErrorKind};
@@ -39,13 +41,13 @@ pub enum InsertUnsafeTaskError {
 impl From<InsertUnsafeTaskError> for EngineTaskError {
     fn from(value: InsertUnsafeTaskError) -> Self {
         match value {
-            InsertUnsafeTaskError::FinalizedBlockFetch => Self::Temporary(Box::new(value)),
-            InsertUnsafeTaskError::FromBlockError(_) => Self::Critical(Box::new(value)),
-            InsertUnsafeTaskError::InsertFailed(_) => Self::Temporary(Box::new(value)),
-            InsertUnsafeTaskError::ForkchoiceUpdateFailed(_) => Self::Temporary(Box::new(value)),
-            InsertUnsafeTaskError::UnexpectedPayloadStatus(_) => Self::Temporary(Box::new(value)),
-            InsertUnsafeTaskError::L2BlockInfoConstruction(_) => Self::Critical(Box::new(value)),
-            InsertUnsafeTaskError::InconsistentForkchoiceState => Self::Reset(Box::new(value)),
+            InsertUnsafeTaskError::FinalizedBlockFetch => Self::Temporary(Arc::new(value)),
+            InsertUnsafeTaskError::FromBlockError(_) => Self::Critical(Arc::new(value)),
+            InsertUnsafeTaskError::InsertFailed(_) => Self::Temporary(Arc::new(value)),
+            InsertUnsafeTaskError::ForkchoiceUpdateFailed(_) => Self::Temporary(Arc::new(value)),
+            InsertUnsafeTaskError::UnexpectedPayloadStatus(_) => Self::Temporary(Arc::new(value)),
+            InsertUnsafeTaskError::L2BlockInfoConstruction(_) => Self::Critical(Arc::new(value)),
+            InsertUnsafeTaskError::InconsistentForkchoiceState => Self::Reset(Arc::new(value)),
         }
     }
 }

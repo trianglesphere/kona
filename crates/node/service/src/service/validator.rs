@@ -15,7 +15,6 @@ use kona_rpc::{
     L1WatcherQueries, NetworkRpc, OpP2PApiServer, RollupNodeApiServer, RollupRpc, RpcLauncher,
     RpcLauncherError,
 };
-use kona_sources::L2ForkchoiceState;
 use std::fmt::Display;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio_util::sync::CancellationToken;
@@ -83,11 +82,8 @@ pub trait ValidatorNodeService {
         l1_watcher_inbound_queries: Option<tokio::sync::mpsc::Receiver<L1WatcherQueries>>,
     ) -> Self::DataAvailabilityWatcher;
 
-    /// Creates a new instance of the [`Pipeline`] and initializes it. Returns the starting L2
-    /// forkchoice state and the initialized derivation pipeline.
-    async fn init_derivation(
-        &self,
-    ) -> Result<(L2ForkchoiceState, Self::DerivationPipeline), Self::Error>;
+    /// Creates a new instance of the [`Pipeline`] and leaves it uninitialized.
+    async fn init_derivation(&self) -> Result<Self::DerivationPipeline, Self::Error>;
 
     /// Creates a new instance of the [`Network`].
     async fn init_network(&self) -> Result<Option<(Network, NetworkRpc)>, Self::Error>;
@@ -123,7 +119,7 @@ pub trait ValidatorNodeService {
             Some(l1_watcher_queries_recv),
         ));
 
-        let (_, derivation_pipeline) = self.init_derivation().await?;
+        let derivation_pipeline = self.init_derivation().await?;
         let (engine_l2_safe_tx, engine_l2_safe_rx) =
             tokio::sync::watch::channel(L2BlockInfo::default());
         let derivation = DerivationActor::new(

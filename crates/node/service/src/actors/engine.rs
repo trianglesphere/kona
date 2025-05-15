@@ -1,15 +1,18 @@
 //! The Engine Actor
 
+use alloy_provider::RootProvider;
 use alloy_rpc_types_engine::JwtSecret;
 use async_trait::async_trait;
-use kona_derive::types::Signal;
+use kona_derive::types::{ResetSignal, Signal};
 use kona_engine::{
-    ConsolidateTask, Engine, EngineClient, EngineQueries, EngineStateBuilder,
-    EngineStateBuilderError, EngineTask, EngineTaskError, InsertUnsafeTask,
+    ConsolidateTask, Engine, EngineClient, EngineError as EngineQueueError, EngineQueries,
+    EngineStateBuilder, EngineStateBuilderError, EngineTask, EngineTaskError, InsertUnsafeTask,
+    SyncStatus,
 };
 use kona_genesis::RollupConfig;
 use kona_protocol::{L2BlockInfo, OpAttributesWithParent};
 use kona_sources::RuntimeConfig;
+use op_alloy_network::Optimism;
 use op_alloy_provider::ext::engine::OpEngineApi;
 use op_alloy_rpc_types_engine::OpNetworkPayloadEnvelope;
 use std::sync::Arc;
@@ -33,11 +36,12 @@ use crate::NodeActor;
 #[derive(Debug)]
 pub struct EngineActor {
     /// The [`RollupConfig`] used to build tasks.
-    pub config: Arc<RollupConfig>,
+    config: Arc<RollupConfig>,
     /// An [`EngineClient`] used for creating engine tasks.
-    pub client: Arc<EngineClient>,
+    client: Arc<EngineClient>,
     /// The [`Engine`].
-    pub engine: Engine,
+    engine: Engine,
+
     /// The channel to send the l2 safe head to the derivation actor.
     engine_l2_safe_head_tx: WatchSender<L2BlockInfo>,
     /// Handler for inbound queries to the engine.
@@ -56,6 +60,9 @@ pub struct EngineActor {
     unsafe_block_rx: UnboundedReceiver<OpNetworkPayloadEnvelope>,
     /// The cancellation token, shared between all tasks.
     cancellation: CancellationToken,
+
+    /// A flag to track whether or not the engine has been initialized.
+    initialized: bool,
 }
 
 impl EngineActor {
@@ -77,38 +84,31 @@ impl EngineActor {
         Self {
             config,
             client: Arc::new(client),
+            engine,
             sync_complete_tx,
             derivation_signal_tx,
-            engine,
             engine_l2_safe_head_tx,
             runtime_config_rx,
             inbound_queries,
             attributes_rx,
             unsafe_block_rx,
             cancellation,
+            initialized: false,
         }
     }
 
     /// Checks if the engine is syncing, notifying the derivation actor if necessary.
-    pub fn check_sync(&self) {
+    fn check_sync(&self) {
         // If the channel is closed, the receiver already marked engine ready.
         if self.sync_complete_tx.is_closed() {
             return;
         }
-        let client = Arc::clone(&self.client);
-        let channel = self.sync_complete_tx.clone();
-        tokio::task::spawn(async move {
-            if let Ok(sync_status) = client.syncing().await {
-                // If the sync status is not `None`, continue syncing.
-                if !matches!(sync_status, alloy_rpc_types_eth::SyncStatus::None) {
-                    trace!(target: "engine", ?sync_status, "SYNCING");
-                    return;
-                }
-                // If the sync status is `None`, begin derivation.
-                trace!(target: "engine", "Sending signal to start derivation");
-                channel.send(()).ok();
-            }
-        });
+
+        if matches!(self.engine.state().sync_status, SyncStatus::ExecutionLayerFinished) {
+            // If the sync status is `None`, begin derivation.
+            trace!(target: "engine", "Sending signal to start derivation");
+            self.sync_complete_tx.send(()).ok();
+        }
     }
 
     /// Starts a task to handle engine queries.
@@ -134,45 +134,6 @@ impl EngineActor {
     }
 }
 
-/// Configuration for the Engine Actor.
-#[derive(Debug, Clone)]
-pub struct EngineLauncher {
-    /// The [`RollupConfig`].
-    pub config: Arc<RollupConfig>,
-    /// The engine rpc url.
-    pub engine_url: Url,
-    /// The l2 rpc url.
-    pub l2_rpc_url: Url,
-    /// The engine jwt secret.
-    pub jwt_secret: JwtSecret,
-}
-
-impl EngineLauncher {
-    /// Launches the [`Engine`]. Returns the [`Engine`] and a channel to receive engine state
-    /// updates.
-    pub async fn launch(self) -> Result<Engine, EngineStateBuilderError> {
-        let state = self.state_builder().build().await?;
-        let (engine_state_send, _) = tokio::sync::watch::channel(state);
-
-        Ok(Engine::new(state, engine_state_send))
-    }
-
-    /// Returns the [`EngineClient`].
-    pub fn client(&self) -> EngineClient {
-        EngineClient::new_http(
-            self.engine_url.clone(),
-            self.l2_rpc_url.clone(),
-            self.config.clone(),
-            self.jwt_secret,
-        )
-    }
-
-    /// Returns an [`EngineStateBuilder`].
-    pub fn state_builder(&self) -> EngineStateBuilder {
-        EngineStateBuilder::new(self.client())
-    }
-}
-
 #[async_trait]
 impl NodeActor for EngineActor {
     type InboundEvent = ();
@@ -184,7 +145,16 @@ impl NodeActor for EngineActor {
             .map(|inbound_query_channel| self.start_query_task(inbound_query_channel));
 
         loop {
+            // If the engine hasn't yet initialized, send the initial reset.
+            if !self.initialized {
+                self.engine.reset().await.unwrap();
+                self.initialized = true;
+                continue;
+            }
+
             tokio::select! {
+                biased;
+
                 _ = self.cancellation.cancelled() => {
                     warn!(target: "engine", "EngineActor received shutdown signal.");
 
@@ -194,6 +164,22 @@ impl NodeActor for EngineActor {
                     }
 
                     return Ok(());
+                }
+                Some(config) = self.runtime_config_rx.recv() => {
+                    let client = Arc::clone(&self.client);
+                    tokio::task::spawn(async move {
+                        debug!(target: "engine", config = ?config, "Received runtime config");
+                        let recommended = config.recommended_protocol_version;
+                        let required = config.required_protocol_version;
+                        match client.signal_superchain_v1(recommended, required).await {
+                            Ok(v) => info!(target: "engine", ?v, "[SUPERCHAIN::SIGNAL]"),
+                            Err(e) => {
+                                // Since the `engine_signalSuperchainV1` endpoint is OPTIONAL,
+                                // a warning is logged instead of an error.
+                                warn!(target: "engine", ?e, "Failed to send superchain signal (OPTIONAL)");
+                            }
+                        }
+                    });
                 }
                 res = self.engine.drain() => {
                     match res {
@@ -211,7 +197,22 @@ impl NodeActor for EngineActor {
                           let sent = self.engine_l2_safe_head_tx.send_if_modified(update);
                           trace!(target: "engine", ?sent, "Attempted L2 Safe Head Update");
                         }
-                        Err(EngineTaskError::Flush(e)) => {
+                        Err(EngineQueueError::Reset { new_safe_head, safe_head_l1_origin, system_config }) => {
+                            let res = self.derivation_signal_tx.send(ResetSignal {
+                                l2_safe_head: new_safe_head,
+                                l1_origin: safe_head_l1_origin,
+                                system_config: Some(system_config)
+                            }.signal());
+                            match res {
+                                Ok(_) => debug!(target: "engine", "Sent reset signal to derivation actor"),
+                                Err(e) => {
+                                    error!(target: "engine", ?e, "Failed to send reset signal to the derivation actor.");
+                                    self.cancellation.cancel();
+                                    return Err(EngineError::ChannelClosed);
+                                }
+                            }
+                        }
+                        Err(EngineQueueError::Task(EngineTaskError::Flush(e))) => {
                             // This error is encountered when the payload is marked INVALID
                             // by the engine api. Post-holocene, the payload is replaced by
                             // a "deposits-only" block and re-executed. At the same time,
@@ -228,22 +229,6 @@ impl NodeActor for EngineActor {
                         }
                         Err(e) => warn!(target: "engine", ?e, "Error draining engine tasks"),
                     }
-                }
-                attributes = self.attributes_rx.recv() => {
-                    let Some(attributes) = attributes else {
-                        error!(target: "engine", "Attributes receiver closed unexpectedly, exiting node");
-                        self.cancellation.cancel();
-                        return Err(EngineError::ChannelClosed);
-                    };
-                    let task = ConsolidateTask::new(
-                        Arc::clone(&self.client),
-                        Arc::clone(&self.config),
-                        attributes,
-                        true,
-                    );
-                    let task = EngineTask::Consolidate(task);
-                    self.engine.enqueue(task);
-                    debug!(target: "engine", "Enqueued attributes consolidation task.");
                 }
                 unsafe_block = self.unsafe_block_rx.recv() => {
                     let Some(envelope) = unsafe_block else {
@@ -262,21 +247,21 @@ impl NodeActor for EngineActor {
                     debug!(target: "engine", ?hash, "Enqueued unsafe block task.");
                     self.check_sync();
                 }
-                Some(config) = self.runtime_config_rx.recv() => {
-                    let client = Arc::clone(&self.client);
-                    tokio::task::spawn(async move {
-                        debug!(target: "engine", config = ?config, "Received runtime config");
-                        let recommended = config.recommended_protocol_version;
-                        let required = config.required_protocol_version;
-                        match client.signal_superchain_v1(recommended, required).await {
-                            Ok(v) => info!(target: "engine", ?v, "[SUPERCHAIN::SIGNAL]"),
-                            Err(e) => {
-                                // Since the `engine_signalSuperchainV1` endpoint is OPTIONAL,
-                                // a warning is logged instead of an error.
-                                warn!(target: "engine", ?e, "Failed to send superchain signal (OPTIONAL)");
-                            }
-                        }
-                    });
+                attributes = self.attributes_rx.recv() => {
+                    let Some(attributes) = attributes else {
+                        error!(target: "engine", "Attributes receiver closed unexpectedly, exiting node");
+                        self.cancellation.cancel();
+                        return Err(EngineError::ChannelClosed);
+                    };
+                    let task = ConsolidateTask::new(
+                        Arc::clone(&self.client),
+                        Arc::clone(&self.config),
+                        attributes,
+                        true,
+                    );
+                    let task = EngineTask::Consolidate(task);
+                    self.engine.enqueue(task);
+                    debug!(target: "engine", "Enqueued attributes consolidation task.");
                 }
             }
         }
@@ -284,6 +269,57 @@ impl NodeActor for EngineActor {
 
     async fn process(&mut self, _: Self::InboundEvent) -> Result<(), Self::Error> {
         Ok(())
+    }
+}
+
+/// Configuration for the Engine Actor.
+#[derive(Debug, Clone)]
+pub struct EngineLauncher {
+    /// The [`RollupConfig`].
+    pub config: Arc<RollupConfig>,
+    /// The engine rpc url.
+    pub engine_url: Url,
+    /// The l2 rpc url.
+    pub l2_rpc_url: Url,
+    /// The l1 rpc url.
+    pub l1_rpc_url: Url,
+    /// The engine jwt secret.
+    pub jwt_secret: JwtSecret,
+}
+
+impl EngineLauncher {
+    /// Launches the [`Engine`]. Returns the [`Engine`] and a channel to receive engine state
+    /// updates.
+    pub async fn launch(self) -> Result<Engine, EngineStateBuilderError> {
+        let state = self.state_builder().build().await?;
+        let (engine_state_send, _) = tokio::sync::watch::channel(state);
+        let engine_client = self.client();
+        let l1_provider = RootProvider::new_http(self.l1_rpc_url);
+        let l2_provider = RootProvider::<Optimism>::new_http(self.l2_rpc_url);
+
+        Ok(Engine::new(
+            state,
+            engine_state_send,
+            self.config.clone(),
+            engine_client,
+            l1_provider,
+            l2_provider,
+        ))
+    }
+
+    /// Returns the [`EngineClient`].
+    pub fn client(&self) -> EngineClient {
+        EngineClient::new_http(
+            self.engine_url.clone(),
+            self.l2_rpc_url.clone(),
+            self.config.clone(),
+            self.jwt_secret,
+        )
+    }
+
+    /// Returns an [`EngineStateBuilder`].
+    pub fn state_builder(&self) -> EngineStateBuilder {
+        EngineStateBuilder::new(self.client())
     }
 }
 
