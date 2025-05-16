@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use kona_derive::types::{ResetSignal, Signal};
 use kona_engine::{
     ConsolidateTask, Engine, EngineClient, EngineQueries, EngineResetError, EngineState,
-    EngineTask, EngineTaskError, InsertUnsafeTask,
+    EngineTask, EngineTaskError, ForkchoiceTask, InsertUnsafeTask,
 };
 use kona_genesis::RollupConfig;
 use kona_protocol::{L2BlockInfo, OpAttributesWithParent};
@@ -160,6 +160,13 @@ impl NodeActor for EngineActor {
         }
 
         loop {
+            // If the engine state signals that a forkchoice update is needed, enqueue a task.
+            if self.engine.state().forkchoice_update_needed {
+                self.engine.enqueue(EngineTask::ForkchoiceUpdate(ForkchoiceTask::new(Arc::clone(
+                    &self.client,
+                ))));
+            }
+
             tokio::select! {
                 biased;
 

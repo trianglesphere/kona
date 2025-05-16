@@ -174,7 +174,9 @@ impl EngineTaskExt for InsertUnsafeTask {
             .into());
         }
 
-        // Update the local engine state.
+        // Update the local engine state, now that the block is imported. An FCU has already been
+        // sent that canonicalizes `new_unsafe_ref` as the head block, so we can instruct the engine
+        // to not issue a follow-up FCU.
         state.set_unsafe_head(new_unsafe_ref);
         state.forkchoice_update_needed = false;
 
