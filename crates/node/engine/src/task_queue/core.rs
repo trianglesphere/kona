@@ -41,8 +41,8 @@ impl Engine {
     }
 
     /// Returns true if the inner [`EngineState`] is uninitialized.
-    pub fn is_state_uninitialized(&self) -> bool {
-        self.state == EngineState::default()
+    pub fn is_state_initialized(&self) -> bool {
+        self.state != EngineState::default()
     }
 
     /// Returns a reference to the inner [`EngineState`].
@@ -81,8 +81,11 @@ impl Engine {
         self.state.set_finalized_head(start.finalized);
 
         // Find the new safe head's L1 origin and SystemConfig.
-        let origin_block =
-            start.safe.l1_origin.number - config.channel_timeout(start.safe.block_info.timestamp);
+        let origin_block = start
+            .safe
+            .l1_origin
+            .number
+            .saturating_sub(config.channel_timeout(start.safe.block_info.timestamp));
         let l1_origin_info: BlockInfo = client
             .l1_provider()
             .get_block(origin_block.into())

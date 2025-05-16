@@ -92,7 +92,7 @@ impl EngineActor {
     /// Resets the inner [`Engine`] and propagates the reset to the derivation actor.
     pub async fn reset(&mut self) -> Result<(), EngineError> {
         let (l2_safe_head, l1_origin, system_config) =
-            self.engine.reset(self.client.clone(), &self.config).await.expect("TODO: Handle");
+            self.engine.reset(self.client.clone(), &self.config).await?;
 
         let signal = ResetSignal { l2_safe_head, l1_origin, system_config: Some(system_config) };
         match self.derivation_signal_tx.send(signal.signal()) {
@@ -155,7 +155,7 @@ impl NodeActor for EngineActor {
             .map(|inbound_query_channel| self.start_query_task(inbound_query_channel));
 
         // Check if the engine state is uninitialized. If so, trigger the initial reset.
-        if self.engine.is_state_uninitialized() {
+        if !self.engine.is_state_initialized() {
             self.reset().await?;
         }
 
