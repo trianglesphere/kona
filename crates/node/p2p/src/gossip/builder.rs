@@ -42,6 +42,8 @@ pub struct GossipDriverBuilder {
     rollup_config: Option<RollupConfig>,
     /// Topic scoring. Disabled by default.
     topic_scoring: bool,
+    /// Optional mesh manager configuration for controlling peer mesh health.
+    mesh_manager: Option<crate::peers::MeshManager>,
 }
 
 impl GossipDriverBuilder {
@@ -59,7 +61,15 @@ impl GossipDriverBuilder {
             peer_redial: None,
             rollup_config: None,
             topic_scoring: false,
+            mesh_manager: None,
         }
+    }
+
+    /// Sets the mesh manager configuration for the driver.
+    /// This enables active peer mesh management for stable connections.
+    pub fn with_mesh_manager(mut self, mesh_manager: crate::peers::MeshManager) -> Self {
+        self.mesh_manager = Some(mesh_manager);
+        self
     }
 
     /// Sets the number of times to redial a peer.
@@ -201,6 +211,22 @@ impl GossipDriverBuilder {
 
         let redialing = self.peer_redial;
 
-        Ok(GossipDriver::new(swarm, addr, redialing, handler))
+        // Create the base driver
+        let mut driver = GossipDriver::new(swarm, addr, redialing, handler);
+
+        // If a custom mesh manager was provided, use it instead of the default
+        if let Some(mesh_config) = self.mesh_manager {
+            driver.mesh_tracker = Some(crate::peers::MeshTracker::new(mesh_config));
+            info!(
+                target: "gossip",
+                "Configured mesh management: target={}, low={}, high={}, rotation={}s",
+                driver.mesh_tracker.as_ref().unwrap().config.target,
+                driver.mesh_tracker.as_ref().unwrap().config.low_watermark,
+                driver.mesh_tracker.as_ref().unwrap().config.high_watermark,
+                driver.mesh_tracker.as_ref().unwrap().config.rotation_period.as_secs(),
+            );
+        }
+
+        Ok(driver)
     }
 }

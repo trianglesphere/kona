@@ -41,6 +41,9 @@ impl Network {
     /// The frequency at which to inspect peer scores to ban poorly performing peers.
     const PEER_SCORE_INSPECT_FREQUENCY: Duration = Duration::from_secs(1);
 
+    /// The frequency at which to check for peer rotation (refreshing the mesh).
+    const PEER_ROTATION_CHECK_FREQUENCY: Duration = Duration::from_secs(5);
+
     /// Returns the [`NetworkBuilder`] that can be used to construct the [`Network`].
     pub const fn builder() -> NetworkBuilder {
         NetworkBuilder::new()
@@ -66,6 +69,9 @@ impl Network {
 
         // We are checking the peer scores every [`Self::PEER_SCORE_INSPECT_FREQUENCY`] seconds.
         let mut peer_score_inspector = tokio::time::interval(Self::PEER_SCORE_INSPECT_FREQUENCY);
+
+        // Set up interval for checking if peers need rotation to maintain mesh health
+        let mut peer_rotation_checker = tokio::time::interval(Self::PEER_ROTATION_CHECK_FREQUENCY);
 
         // Start the libp2p Swarm
         self.gossip.listen().await?;
@@ -144,6 +150,44 @@ impl Network {
                         // We send a request to the discovery handler to ban the set of addresses.
                         if let Err(send_err) = handler.sender.send(HandlerRequest::BanAddrs { addrs_to_ban: addrs_to_ban.into(), ban_duration: ban_peers.ban_duration }).await{
                             warn!(err = ?send_err, "Impossible to send a request to the discovery handler. The channel connection is dropped.");
+                        }
+                    },
+
+                    _ = peer_rotation_checker.tick(), if self.gossip.mesh_tracker.is_some() => {
+                        // Check if we need to rotate peers to maintain mesh health
+                        let Some(tracker) = &mut self.gossip.mesh_tracker else {
+                            continue;
+                        };
+
+                        // If it's time to rotate peers for mesh health
+                        if tracker.should_rotate_peers() {
+                            info!(
+                                target: "gossip",
+                                "Starting peer rotation, current count: {}, target: {}",
+                                tracker.peer_count(),
+                                tracker.config.target
+                            );
+
+                            // Get list of peers to rotate out (based on connection times)
+                            tracker.select_peers_for_rotation();
+
+                            // Disconnect the selected peers to allow for new connections
+                            for peer_id in tracker.peers_to_rotate.iter() {
+                                debug!(target: "gossip", "Rotating out peer: {:?} for mesh health", peer_id);
+
+                                // Disconnect but don't ban - this is a healthy rotation
+                                if self.gossip.swarm.disconnect_peer_id(*peer_id).is_err() {
+                                    warn!(
+                                        target: "gossip",
+                                        peer = ?peer_id,
+                                        "Trying to disconnect a non-existing peer during rotation"
+                                    );
+                                }
+
+                                if let Some(addr) = self.gossip.peerstore.remove(peer_id){
+                                    self.gossip.dialed_peers.remove(&addr);
+                                }
+                            }
                         }
                     },
                     req = rpc.recv() => {

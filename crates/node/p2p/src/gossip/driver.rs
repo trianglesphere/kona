@@ -13,7 +13,8 @@ use std::collections::HashMap;
 
 use crate::{
     Behaviour, BlockHandler, EnrValidation, Event, GossipDriverBuilder, Handler, PublishError,
-    enr_to_multiaddr, peers::PeerMonitoring,
+    enr_to_multiaddr,
+    peers::{MeshManager, MeshTracker, PeerMonitoring},
 };
 
 /// A driver for a [`Swarm`] instance.
@@ -40,6 +41,8 @@ pub struct GossipDriver {
     pub peer_monitoring: Option<PeerMonitoring>,
     /// The number of times to redial a peer.
     pub peer_redialing: Option<u64>,
+    /// Manages peer mesh connectivity and rotation.
+    pub mesh_tracker: Option<MeshTracker>,
 }
 
 impl GossipDriver {
@@ -63,6 +66,7 @@ impl GossipDriver {
             peerstore: Default::default(),
             peer_monitoring: None,
             peer_redialing: redialing,
+            mesh_tracker: Some(MeshTracker::new(MeshManager::default())),
         }
     }
 
@@ -279,6 +283,22 @@ impl GossipDriver {
                 );
                 kona_macros::set!(gauge, crate::Metrics::GOSSIP_PEER_COUNT, peer_count as f64);
                 self.peerstore.insert(peer_id, endpoint.get_remote_address().clone());
+
+                // Track the newly connected peer in mesh tracker
+                if let Some(tracker) = &mut self.mesh_tracker {
+                    tracker.peer_connected(peer_id);
+
+                    // If we have too many peers after this connection, we might need to prune some
+                    if tracker.has_excess_peers() {
+                        debug!(
+                            target: "gossip",
+                            "Peer mesh size exceeds high watermark ({} > {}), considering pruning",
+                            tracker.peer_count(),
+                            tracker.config.high_watermark
+                        );
+                    }
+                }
+
                 return None;
             }
             SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
@@ -289,8 +309,18 @@ impl GossipDriver {
                     "outgoing_error",
                     peer_id.map(|p| p.to_string()).unwrap_or_default()
                 );
-                if let Some(id) = peer_id {
-                    self.redial(id);
+
+                // Only try to reconnect if we're below our target mesh size
+                let should_redial = if let Some(tracker) = &self.mesh_tracker {
+                    tracker.needs_more_peers()
+                } else {
+                    true
+                };
+
+                if should_redial {
+                    if let Some(id) = peer_id {
+                        self.redial(id);
+                    }
                 }
                 return None;
             }
@@ -306,10 +336,32 @@ impl GossipDriver {
             }
             SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                 let peer_count = self.swarm.connected_peers().count();
-                debug!(target: "gossip", "Connection closed, redialing peer: {:?} | {:?} | Peer Count: {}", peer_id, cause, peer_count);
+                debug!(target: "gossip", "Connection closed, peer: {:?} | {:?} | Peer Count: {}", peer_id, cause, peer_count);
                 kona_macros::inc!(gauge, crate::Metrics::GOSSIPSUB_CONNECTION, "type", "closed");
                 kona_macros::set!(gauge, crate::Metrics::GOSSIP_PEER_COUNT, peer_count as f64);
-                self.redial(peer_id);
+
+                // Update mesh tracker about the disconnected peer
+                if let Some(tracker) = &mut self.mesh_tracker {
+                    tracker.peer_disconnected(&peer_id);
+
+                    // Only redial if we need more peers
+                    if tracker.needs_more_peers() {
+                        debug!(
+                            target: "gossip",
+                            "Peer count below low watermark ({} < {}), redialing",
+                            tracker.peer_count(),
+                            tracker.config.low_watermark
+                        );
+                        self.redial(peer_id);
+                    } else {
+                        debug!(target: "gossip", "Not redialing disconnected peer, mesh is healthy: {} peers",
+                               tracker.peer_count());
+                    }
+                } else {
+                    // No mesh management, default to original behavior
+                    self.redial(peer_id);
+                }
+
                 return None;
             }
             SwarmEvent::NewListenAddr { listener_id, address } => {

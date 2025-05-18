@@ -67,3 +67,6 @@ pub use utils::{
 
 mod monitoring;
 pub use monitoring::PeerMonitoring;
+
+mod mesh;
+pub use mesh::{MeshManager, MeshTracker};
