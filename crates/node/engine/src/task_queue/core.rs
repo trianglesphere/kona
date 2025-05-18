@@ -62,6 +62,9 @@ impl Engine {
     /// Enqueues a new [`EngineTask`] for execution.
     pub fn enqueue(&mut self, task: EngineTask) {
         self.tasks.push(task);
+
+        // Update the task count metric
+        kona_macros::inc!(gauge, Metrics::ENGINE_TASK_QUEUE_TASK_COUNT);
     }
 
     /// Resets the engine by finding a plausible sync starting point via
@@ -136,6 +139,13 @@ impl Engine {
 
             // Pop the task from the queue now that it's been executed.
             self.tasks.pop();
+
+            // Update the task count metric
+            kona_macros::set!(
+                gauge,
+                Metrics::ENGINE_TASK_QUEUE_TASK_COUNT,
+                self.tasks.len() as f64
+            );
         }
 
         Ok(())

@@ -41,6 +41,9 @@ impl Metrics {
     /// Identifier for the counter that tracks the number of times the engine has been reset.
     pub const ENGINE_RESET_COUNT: &str = "kona_node_engine_reset_count";
 
+    /// Identifier for the gauge that tracks the number of items in the engine task queue.
+    pub const ENGINE_TASK_QUEUE_TASK_COUNT: &str = "kona_node_engine_task_queue_task_count";
+
     /// Initializes metrics for the engine.
     ///
     /// This does two things:
@@ -74,6 +77,13 @@ impl Metrics {
             metrics::Unit::Count,
             "Engine reset count"
         );
+
+        // Engine task queue size
+        metrics::describe_gauge!(
+            Self::ENGINE_TASK_QUEUE_TASK_COUNT,
+            metrics::Unit::Count,
+            "Engine task queue size"
+        );
     }
 
     /// Initializes metrics to `0` so they can be queried immediately by consumers of prometheus
@@ -95,5 +105,8 @@ impl Metrics {
 
         // Engine reset count
         kona_macros::set!(counter, Self::ENGINE_RESET_COUNT, 0);
+
+        // Engine task queue task count
+        kona_macros::set!(gauge, Self::ENGINE_TASK_QUEUE_TASK_COUNT, 0);
     }
 }
