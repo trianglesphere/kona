@@ -102,7 +102,7 @@ jobs:
         id: prepare
         run: |
           # Just to keep things DRY
-          ASSETS_PREFIX="./.github/assets/kurtosis_op_network_params_"
+          ASSETS_PREFIX="./.config/kurtosis_network_params_supervisor_"
 
           # If the filter does not match anything, we want the script to error out
           # 
