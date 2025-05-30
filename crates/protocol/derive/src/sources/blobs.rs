@@ -159,6 +159,7 @@ where
     }
 
     /// Extracts the next data from the source.
+    #[expect(clippy::result_large_err)]
     fn next_data(&mut self) -> Result<BlobData, PipelineResult<Bytes>> {
         if self.data.is_empty() {
             return Err(Err(PipelineError::Eof.temp()));
