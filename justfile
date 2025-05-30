@@ -75,7 +75,7 @@ lint-asterisc:
 
 # Lint the Rust documentation
 lint-docs:
-  RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+  RUSTDOCFLAGS="-D warnings" cargo --locked doc --workspace --no-deps --document-private-items
 
 # Test the Rust documentation
 test-docs:
