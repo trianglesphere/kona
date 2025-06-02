@@ -50,6 +50,7 @@ impl From<Config> for NetworkBuilder {
             .with_keypair(config.keypair)
             .with_topic_scoring(config.topic_scoring)
             .with_peer_redial(config.redial)
+            .with_ping_enabled(config.ping_enabled)
     }
 }
 
@@ -71,6 +72,11 @@ impl NetworkBuilder {
     /// Sets the number of times to redial a peer.
     pub fn with_peer_redial(self, redial: Option<u64>) -> Self {
         Self { gossip: self.gossip.with_peer_redial(redial), ..self }
+    }
+
+    /// Sets the ping to be enabled or disabled.
+    pub fn with_ping_enabled(self, ping_enabled: bool) -> Self {
+        Self { gossip: self.gossip.with_ping_enabled(ping_enabled), ..self }
     }
 
     /// Sets the bootstore path for the [`crate::Discv5Driver`].

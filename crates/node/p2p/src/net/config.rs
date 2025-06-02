@@ -40,6 +40,8 @@ pub struct Config {
     pub bootstore: Option<PathBuf>,
     /// The optional number of times to redial a peer.
     pub redial: Option<u64>,
+    /// If the ping is enabled.
+    pub ping_enabled: bool,
     /// An optional list of bootnode ENRs to start the node with.
     pub bootnodes: Vec<Enr>,
     /// The [`RollupConfig`].

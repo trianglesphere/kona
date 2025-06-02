@@ -42,6 +42,8 @@ pub struct GossipDriverBuilder {
     rollup_config: Option<RollupConfig>,
     /// Topic scoring. Disabled by default.
     topic_scoring: bool,
+    /// Whether the ping protocol is enabled.
+    ping_enabled: bool,
 }
 
 impl GossipDriverBuilder {
@@ -59,6 +61,7 @@ impl GossipDriverBuilder {
             peer_redial: None,
             rollup_config: None,
             topic_scoring: false,
+            ping_enabled: true, // Ping is enabled by default
         }
     }
 
@@ -67,6 +70,12 @@ impl GossipDriverBuilder {
     /// If set to `0`, peers will be redialed indefinitely.
     pub const fn with_peer_redial(mut self, peer_redial: Option<u64>) -> Self {
         self.peer_redial = peer_redial;
+        self
+    }
+
+    /// Sets the ping protocol to be enabled or disabled.
+    pub const fn with_ping_enabled(mut self, ping_enabled: bool) -> Self {
+        self.ping_enabled = ping_enabled;
         self
     }
 
@@ -141,6 +150,7 @@ impl GossipDriverBuilder {
         let signer_recv = self.signer.ok_or(GossipDriverBuilderError::MissingUnsafeBlockSigner)?;
         let rollup_config =
             self.rollup_config.take().ok_or(GossipDriverBuilderError::MissingRollupConfig)?;
+        let ping_enabled = self.ping_enabled;
 
         // Block Handler setup
         let handler = BlockHandler::new(rollup_config, signer_recv);
@@ -164,7 +174,8 @@ impl GossipDriverBuilder {
             config.validation_mode(),
             config.max_transmit_size()
         );
-        let mut behaviour = Behaviour::new(keypair.public(), config, &[Box::new(handler.clone())])?;
+        let mut behaviour =
+            Behaviour::new(keypair.public(), config, &[Box::new(handler.clone())], ping_enabled)?;
 
         // If peer scoring is configured, set it on the behaviour.
         if let Some(scoring) = self.scoring {

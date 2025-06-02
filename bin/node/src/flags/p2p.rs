@@ -147,6 +147,10 @@ pub struct P2PArgs {
     #[arg(long = "p2p.ban.duration", default_value = "30", env = "KONA_NODE_P2P_BAN_DURATION")]
     pub ban_duration: u32,
 
+    /// Enables the P2P ping-pong background service.
+    #[arg(long = "p2p.ping", default_value = true, env = "KONA_NODE_P2P_PING")]
+    pub ping_enabled: bool,
+
     /// The interval in seconds to find peers using the discovery service.
     /// Defaults to 5 seconds.
     #[arg(
@@ -155,9 +159,11 @@ pub struct P2PArgs {
         env = "KONA_NODE_P2P_DISCOVERY_INTERVAL"
     )]
     pub discovery_interval: u64,
+
     /// The directory to store the bootstore.
     #[arg(long = "p2p.bootstore", env = "KONA_NODE_P2P_BOOTSTORE")]
     pub bootstore: Option<PathBuf>,
+
     /// Peer Redialing threshold is the maximum amount of times to attempt to redial a peer that
     /// disconnects. By default, peers are *not* redialed. If set to 0, the peer will be
     /// redialed indefinitely.
@@ -389,6 +395,7 @@ impl P2PArgs {
             bootstore: self.bootstore,
             topic_scoring: self.topic_scoring,
             redial: self.peer_redial,
+            ping_enabled: self.ping_enabled,
             bootnodes: self.bootnodes,
             rollup_config: config.clone(),
         })

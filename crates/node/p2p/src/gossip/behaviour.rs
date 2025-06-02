@@ -22,13 +22,61 @@ pub enum BehaviourError {
     PeerScoreFailed(String),
 }
 
-/// Specifies the [`NetworkBehaviour`] of the node
+/// Optional Ping Behaviour.
+#[derive(Debug)]
+pub struct OptionalPing(pub Option<libp2p::ping::Behaviour>);
+
+impl NetworkBehaviour for OptionalPing {
+    type ConnectionHandler = Handler;
+    type ToSwarm = Event;
+
+    fn handle_established_inbound_connection(
+        &mut self,
+        _: ConnectionId,
+        _: PeerId,
+        _: &Multiaddr,
+        _: &Multiaddr,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        match self.0 {
+            Some(ref ping) => Ok(Handler::new_with_ping(self.config.clone(), ping.clone())),
+            None => Ok(Handler::new(self.config.clone())),
+        }
+        Ok(Handler::new(self.config.clone()))
+    }
+
+    fn handle_established_outbound_connection(
+        &mut self,
+        _: ConnectionId,
+        _: PeerId,
+        _: &Multiaddr,
+        _: Endpoint,
+        _: PortUse,
+    ) -> Result<THandler<Self>, ConnectionDenied> {
+        Ok(Handler::new(self.config.clone()))
+    }
+
+    fn on_connection_handler_event(
+        &mut self,
+        peer: PeerId,
+        connection: ConnectionId,
+        result: THandlerOutEvent<Self>,
+    ) {
+        self.events.push_front(Event {
+            peer,
+            connection,
+            result,
+        })
+    }
+
+}
+
+/// Specifies the [`NetworkBehaviour`].
 #[derive(NetworkBehaviour, Debug)]
 #[behaviour(out_event = "Event")]
 pub struct Behaviour {
     /// Responds to inbound pings and send outbound pings.
     #[debug(skip)]
-    pub ping: libp2p::ping::Behaviour,
+    pub ping: Option<libp2p::ping::Behaviour>,
     /// Enables gossipsub as the routing layer.
     pub gossipsub: libp2p::gossipsub::Behaviour,
     /// Enables the identify protocol.
@@ -43,8 +91,9 @@ impl Behaviour {
         public_key: libp2p::identity::PublicKey,
         cfg: Config,
         handlers: &[Box<dyn Handler>],
+        ping: bool,
     ) -> Result<Self, BehaviourError> {
-        let ping = libp2p::ping::Behaviour::default();
+        let ping = ping.then_some(libp2p::ping::Behaviour::default());
 
         let mut gossipsub = libp2p::gossipsub::Behaviour::new(MessageAuthenticity::Anonymous, cfg)
             .map_err(|_| BehaviourError::GossipsubCreationFailed)?;
