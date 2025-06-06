@@ -13,7 +13,8 @@ use tokio::{
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
-
+use kona_protocol::BlockInfo;
+use kona_supervisor_storage::models::BlockRef;
 use super::{
     AuthenticationError, ManagedNodeError, NodeEvent, NodeSubscriber, ReceiptProvider,
     SubscriptionError,
@@ -126,6 +127,11 @@ impl ManagedNode {
 
         let _ = self.chain_id.set(chain_id);
         Ok(chain_id)
+    }
+    async fn block_ref_by_number(&self, block_number: u64) -> Result<BlockInfo, ManagedNodeError> {
+        let client = self.get_ws_client().await?;
+        let block_info = ManagedModeApiClient::block_ref_by_number(client.as_ref(), block_number).await?;
+        Ok(block_info)
     }
 
     /// Creates authentication headers using JWT secret.

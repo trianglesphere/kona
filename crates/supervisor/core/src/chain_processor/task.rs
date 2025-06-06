@@ -4,9 +4,10 @@ use crate::{
 };
 use kona_interop::DerivedRefPair;
 use kona_protocol::BlockInfo;
-use kona_supervisor_storage::LogStorageWriter;
+use kona_supervisor_storage::{LogStorageWriter, SafetyHeadRefStorage};
 use kona_supervisor_types::BlockReplacement;
 use std::{fmt::Debug, sync::Arc};
+use op_alloy_consensus::interop::SafetyLevel;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -15,6 +16,8 @@ use tracing::{error, info};
 /// It listens for events emitted by the managed node and handles them accordingly.
 #[derive(Debug)]
 pub struct ChainProcessorTask<P, W> {
+    state_manager: Arc<W>,
+    
     log_indexer: Arc<LogIndexer<P, W>>,
 
     cancel_token: CancellationToken,
@@ -26,7 +29,7 @@ pub struct ChainProcessorTask<P, W> {
 impl<P, W> ChainProcessorTask<P, W>
 where
     P: ManagedNodeProvider + 'static,
-    W: LogStorageWriter + 'static,
+    W: LogStorageWriter + SafetyHeadRefStorage + 'static,
 {
     /// Creates a new [`ChainProcessorTask`].
     pub fn new(
@@ -38,6 +41,7 @@ where
         Self {
             cancel_token,
             event_rx,
+            state_manager: state_manager.clone(),
             log_indexer: Arc::from(LogIndexer::new(managed_node, state_manager)),
         }
     }
@@ -66,6 +70,7 @@ where
             NodeEvent::BlockReplaced { replacement } => {
                 self.handle_block_replacement(replacement).await
             }
+            NodeEvent::Reset => self.handle_reset_event().await,
         }
     }
 
@@ -92,6 +97,52 @@ where
             );
             // TODO: take next action based on the error
         }
+    }
+
+    // reset_full_range() ->
+    // - Find out start and end for reset
+    // - Start = GetAnchor point(First Cross Safe Block) from DB
+    // - End = Latest Local Safe from DB
+    // - Consistency check applied(BlockRefByNumber) from managed node and check hash
+    // - First check End block is consistent
+    // - Check Start is inconsistent - stop and cannot proceed further.
+    // - Use bisection and find out the last consistent block
+    // - from last_consistent_block recalculate safe head refs
+    
+    async fn handle_reset_event(&self) {
+        // whenever we get reset signal from the node we need to find the last consistent block.
+        // Based on the consistent block we need to re-calculate the safety head references and sent 
+        // back those to the managed node.
+        // Finding the consistent block might require a full range search from the start to the end.
+        // That requires a bisection algorithm to find out the target block
+        // We will just check if the Latest Local Safe block is conistent here, if not will chose the anchor point.
+        // TODO: check and implement bisection to find out latest consistent block
+        
+        
+        // Step 1: Get the safety head ref at LocalSafe level
+        let block_info = match self.state_manager.get_safety_head_ref(SafetyLevel::LocalSafe) {
+            Ok(info) => info,
+            Err(err) => {
+                error!(
+                target: "chain_processor",
+                %err,
+                "Failed to get LocalSafe head ref"
+            );
+                return;
+            }
+        };
+
+        // Step 2: Call managed_node.get_block_ref(block_info)
+        let block_from_managed_node  = self.managed_node.get_block_ref(block_info).await {
+            Ok(block_ref) => {
+                info!(?block_ref, "Successfully fetched block reference");
+                // You can proceed with block_ref if needed...
+            }
+            Err(err) => {
+                error!(?err, ?block_info, "Failed to get block reference for given BlockInfo");
+                return;
+            }
+        };
     }
 }
 #[cfg(test)]

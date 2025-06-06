@@ -25,4 +25,7 @@ pub enum NodeEvent {
         /// hash.
         replacement: BlockReplacement,
     },
+    
+    /// A reset event, indicates the node needs to be reset
+    Reset
 }

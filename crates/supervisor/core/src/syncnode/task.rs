@@ -45,7 +45,11 @@ impl ManagedEventTask {
                 // Process each field of the event if it's present
                 if let Some(reset_id) = &event.reset {
                     info!(target: "managed_event_task", %reset_id, "Reset event received");
-                    // TODO: Handle reset action
+                    if let Err(err) =
+                        self.event_tx.send(NodeEvent::Reset).await
+                    {
+                        warn!(target: "managed_event_task", %err, "Failed to send reset event, channel closed or receiver dropped");
+                    }
                 }
 
                 if let Some(unsafe_block) = &event.unsafe_block {

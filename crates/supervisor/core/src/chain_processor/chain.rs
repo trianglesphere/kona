@@ -1,7 +1,7 @@
 use super::{ChainProcessorError, ChainProcessorTask};
 use crate::syncnode::{ManagedNodeProvider, NodeEvent};
 use alloy_primitives::ChainId;
-use kona_supervisor_storage::LogStorageWriter;
+use kona_supervisor_storage::{LogStorageWriter, SafetyHeadRefStorage};
 use std::sync::Arc;
 use tokio::{
     sync::{Mutex, mpsc},
@@ -35,7 +35,7 @@ pub struct ChainProcessor<P, W> {
 impl<P, W> ChainProcessor<P, W>
 where
     P: ManagedNodeProvider + 'static,
-    W: LogStorageWriter + 'static,
+    W: LogStorageWriter + SafetyHeadRefStorage + 'static,
 {
     /// Creates a new instance of [`ChainProcessor`].
     pub fn new(

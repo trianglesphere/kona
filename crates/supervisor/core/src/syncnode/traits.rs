@@ -50,7 +50,10 @@ pub trait ReceiptProvider: Send + Sync + Debug {
 /// This is the main abstraction used for a fully-managed node
 /// within the supervisor context.
 #[async_trait]
-pub trait ManagedNodeProvider: NodeSubscriber + ReceiptProvider + Send + Sync + Debug {}
+pub trait ManagedNodeProvider: NodeSubscriber + ReceiptProvider + Send + Sync + Debug {
+   async fn block_ref_by_number(&self, block_number: u64) -> Result<BlockInfo, ManagedNodeError>;
+}
 
 #[async_trait]
-impl<T> ManagedNodeProvider for T where T: NodeSubscriber + ReceiptProvider + Send + Sync + Debug {}
+impl<T> ManagedNodeProvider for T where T: NodeSubscriber + ReceiptProvider + Send + Sync + Debug {
+}
