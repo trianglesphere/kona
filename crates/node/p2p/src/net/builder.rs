@@ -195,9 +195,21 @@ mod tests {
     use libp2p::gossipsub::IdentTopic;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-    fn network_builder(signer: Option<Address>) -> NetworkBuilder {
+    #[derive(Debug)]
+    struct NetworkBuilderParams {
+        rollup_config: RollupConfig,
+        signer: Address,
+    }
+
+    impl Default for NetworkBuilderParams {
+        fn default() -> Self {
+            Self { rollup_config: RollupConfig::default(), signer: Address::random() }
+        }
+    }
+
+    fn network_builder(params: NetworkBuilderParams) -> NetworkBuilder {
         let keypair = Keypair::generate_secp256k1();
-        let signer = signer.unwrap_or(Address::random());
+        let signer = params.signer;
         let gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 9099);
         let mut gossip_addr = Multiaddr::from(gossip.ip());
         gossip_addr.push(libp2p::multiaddr::Protocol::Tcp(gossip.port()));
@@ -214,7 +226,7 @@ mod tests {
                 .build();
 
         NetworkBuilder::new(
-            RollupConfig::default(),
+            params.rollup_config,
             signer,
             gossip_addr,
             keypair,
@@ -235,13 +247,16 @@ mod tests {
         let mut gossip_addr = Multiaddr::from(gossip.ip());
         gossip_addr.push(libp2p::multiaddr::Protocol::Tcp(gossip.port()));
 
-        let driver = network_builder(Some(signer))
-            .with_rpc_receiver(tokio::sync::mpsc::channel(1).1)
-            .with_gossip_address(gossip_addr.clone())
-            .with_discovery_address(disc_enr)
-            .with_discovery_config(ConfigBuilder::new(disc_listen.into()).build())
-            .build()
-            .unwrap();
+        let driver = network_builder(NetworkBuilderParams {
+            rollup_config: RollupConfig { l2_chain_id: 10, ..Default::default() },
+            signer,
+        })
+        .with_rpc_receiver(tokio::sync::mpsc::channel(1).1)
+        .with_gossip_address(gossip_addr.clone())
+        .with_discovery_address(disc_enr)
+        .with_discovery_config(ConfigBuilder::new(disc_listen.into()).build())
+        .build()
+        .unwrap();
 
         // Driver Assertions
         let id = 10;
@@ -275,7 +290,7 @@ mod tests {
         let discovery_config =
             ConfigBuilder::new(ListenConfig::from_ip(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 9098))
                 .build();
-        let driver = network_builder(None)
+        let driver = network_builder(Default::default())
             .with_gossip_address(gossip_addr)
             .with_discovery_address(disc)
             .with_discovery_config(discovery_config)
