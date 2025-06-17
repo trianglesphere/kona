@@ -36,8 +36,6 @@ pub struct Config {
     pub topic_scoring: bool,
     /// Peer score monitoring config.
     pub monitor_peers: Option<PeerMonitoring>,
-    /// The L2 Block Time.
-    pub block_time: u64,
     /// An optional path to the bootstore.
     pub bootstore: Option<PathBuf>,
     /// The configuration for the connection gater.

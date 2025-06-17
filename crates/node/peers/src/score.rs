@@ -12,6 +12,7 @@ pub enum PeerScoreLevel {
     #[default]
     Off,
     /// Light peer scoring is applied.
+    /// Contains the
     Light,
 }
 
