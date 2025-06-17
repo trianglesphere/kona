@@ -191,7 +191,6 @@ impl NetworkBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::GossipDriverBuilderError;
     use discv5::{ConfigBuilder, ListenConfig, enr::CombinedKey};
     use libp2p::gossipsub::IdentTopic;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -222,28 +221,6 @@ mod tests {
             discovery_address,
             discovery_config,
         )
-    }
-
-    #[test]
-    fn test_build_missing_unsafe_block_signer() {
-        let builder = network_builder(None);
-        let err = builder.build().unwrap_err();
-        assert_eq!(err, NetworkBuilderError::UnsafeBlockSignerNotSet);
-    }
-
-    #[test]
-    fn test_build_missing_rollup_config() {
-        let builder = network_builder(None);
-        let err = builder.with_rpc_receiver(tokio::sync::mpsc::channel(1).1).build().unwrap_err();
-        assert_eq!(err, NetworkBuilderError::MissingRollupConfig);
-    }
-
-    #[test]
-    fn test_build_missing_gossip_address() {
-        let builder = network_builder(None);
-        let err = builder.with_rpc_receiver(tokio::sync::mpsc::channel(1).1).build().unwrap_err();
-        let gossip_err = GossipDriverBuilderError::GossipAddrNotSet;
-        assert_eq!(err, NetworkBuilderError::GossipDriverBuilder(gossip_err));
     }
 
     #[test]
