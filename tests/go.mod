@@ -3,7 +3,7 @@ module github.com/op-rs/kona
 go 1.24.3
 
 // We're using the "develop" branch of the Optimism repo to include the latest changes to the `devnet-sdk` package.
-require github.com/ethereum-optimism/optimism v1.13.4-0.20250610133734-335f05b575d0
+require github.com/ethereum-optimism/optimism v1.13.4-0.20250618153437-6c6340710641
 
 require github.com/stretchr/testify v1.10.0
 
@@ -11,7 +11,7 @@ require github.com/gorilla/websocket v1.5.3
 
 require github.com/ethereum/go-ethereum v1.15.11
 
-require github.com/libp2p/go-libp2p v0.36.2 
+require github.com/libp2p/go-libp2p v0.36.2
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
@@ -280,7 +280,7 @@ require (
 
 replace github.com/ethereum-optimism/optimism/op-node v0.10.14 => github.com/ethereum-optimism/optimism v1.13.4-0.20250610133734-335f05b575d0
 
-// Patched version of the Optimism repo that includes the latest changes of the `devnet-sdk` package to enable testing for the CL clients.
-replace github.com/ethereum-optimism/optimism v1.13.4-0.20250610133734-335f05b575d0 => github.com/theochap/optimism v0.0.0-20250610154333-f7c3ea378f73
+// // Patched version of the Optimism repo that includes the latest changes of the `devnet-sdk` package to enable testing for the CL clients.
+// replace github.com/ethereum-optimism/optimism v1.13.4-0.20250610133734-335f05b575d0 => github.com/theochap/optimism v0.0.0-20250610154333-f7c3ea378f73
 
 replace github.com/ethereum/go-ethereum => github.com/ethereum-optimism/op-geth v1.101511.1-dev.1.0.20250603002020-3e5073a7b5a4
