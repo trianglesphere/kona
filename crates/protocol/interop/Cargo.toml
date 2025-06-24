@@ -60,7 +60,9 @@ std = [
 	"kona-protocol/std",
 	"kona-registry/std",
 	"op-alloy-consensus/std",
+	"rand/std",
 	"serde?/std",
+	"serde_json/std",
 	"thiserror/std",
 	"tracing/std",
 ]
@@ -85,6 +87,7 @@ serde = [
 	"kona-genesis/serde",
 	"kona-protocol/serde",
 	"op-alloy-consensus/serde",
+	"rand/serde",
 ]
 test-utils = [ "kona-protocol/test-utils", "std" ]
 

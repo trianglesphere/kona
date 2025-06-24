@@ -74,6 +74,7 @@ test-utils = [
 	"dep:serde_json",
 	"dep:tempfile",
 	"dep:tokio",
+	"kona-executor/test-utils",
 	"kona-protocol/test-utils",
 ]
 

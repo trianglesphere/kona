@@ -42,10 +42,12 @@ pprof = { workspace = true, features = ["criterion", "flamegraph", "frame-pointe
 [features]
 default = [ "serde" ]
 serde = [
+	"alloy-consensus/serde",
 	"alloy-primitives/serde",
 	"alloy-trie/serde",
 	"dep:serde",
 	"op-alloy-rpc-types-engine/serde",
+	"rand/serde",
 ]
 
 [[bench]]

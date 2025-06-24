@@ -46,6 +46,7 @@ default = []
 tabled = [ "dep:tabled", "std" ]
 std = [
 	"alloy-chains/std",
+	"alloy-eips/std",
 	"alloy-primitives/std",
 	"kona-genesis/std",
 	"serde/std",

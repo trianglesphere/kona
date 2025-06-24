@@ -17,9 +17,6 @@ workflows:
         "--left-side-feature-missing=ignore",
         # Ignore the case that `A` is outside of the workspace. Otherwise it will report errors in external dependencies that we have no influence on.
         "--left-side-outside-workspace=ignore",
-        # Only check normal dependencies.
-        # Propagating to dev-dependencies leads to compilation issues: https://github.com/alloy-rs/alloy/pull/2144#issuecomment-2702291349
-        "--dep-kinds=normal:check,dev:ignore",
         # Ignores `miniz_oxide/serde`, since its `serde` feature implies `std`
         # TODO: Remove once a release has been cut with https://github.com/Frommi/miniz_oxide/pull/178
         "--ignore-missing-propagate=kona-protocol/serde:miniz_oxide/serde",

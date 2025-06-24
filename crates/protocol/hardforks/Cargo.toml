@@ -37,6 +37,8 @@ std = [
 	"alloy-primitives/std",
 	"kona-protocol/std",
 	"op-alloy-consensus/std",
+	"op-revm/std",
+	"revm/std",
 ]
 k256 = [ "alloy-primitives/k256", "op-alloy-consensus/k256" ]
 kzg = [ "alloy-eips/kzg", "op-alloy-consensus/kzg", "std" ]

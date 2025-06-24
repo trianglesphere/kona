@@ -81,20 +81,28 @@ std = [
 	"alloy-rpc-types-engine/std",
 	"alloy-rpc-types-eth/std",
 	"alloy-serde?/std",
+	"alloy-sol-types/std",
 	"brotli/std",
 	"derive_more/std",
 	"kona-genesis/std",
+	"kona-protocol/std",
 	"miniz_oxide/std",
 	"op-alloy-consensus/std",
 	"op-alloy-rpc-types-engine/std",
 	"op-alloy-rpc-types/std",
+	"rand/std",
 	"serde?/std",
+	"serde_json/std",
 	"spin?/std",
 	"thiserror/std",
 	"tracing/std",
 	"unsigned-varint/std",
 ]
-test-utils = [ "dep:spin", "dep:tracing-subscriber" ]
+test-utils = [
+	"dep:spin",
+	"dep:tracing-subscriber",
+	"kona-protocol/test-utils",
+]
 arbitrary = [
 	"alloy-consensus/arbitrary",
 	"alloy-eips/arbitrary",
@@ -103,8 +111,10 @@ arbitrary = [
 	"alloy-rpc-types-engine/arbitrary",
 	"alloy-rpc-types-eth/arbitrary",
 	"alloy-serde?/arbitrary",
+	"alloy-sol-types/arbitrary",
 	"dep:arbitrary",
 	"kona-genesis/arbitrary",
+	"kona-protocol/arbitrary",
 	"op-alloy-consensus/arbitrary",
 	"op-alloy-rpc-types-engine/arbitrary",
 	"op-alloy-rpc-types/arbitrary",
@@ -119,9 +129,11 @@ serde = [
 	"dep:alloy-serde",
 	"dep:serde",
 	"kona-genesis/serde",
+	"kona-protocol/serde",
 	"op-alloy-consensus/serde",
 	"op-alloy-rpc-types-engine/serde",
 	"op-alloy-rpc-types/serde",
+	"rand/serde",
 	"tracing-subscriber?/serde",
 ]
 

@@ -56,7 +56,9 @@ std = [
 	"derive_more/std",
 	"kona-serde?/std",
 	"op-revm?/std",
+	"rand/std",
 	"serde?/std",
+	"serde_json/std",
 	"thiserror/std",
 ]
 arbitrary = [
@@ -76,4 +78,5 @@ serde = [
 	"dep:serde",
 	"dep:serde_repr",
 	"op-revm?/serde",
+	"rand/serde",
 ]
