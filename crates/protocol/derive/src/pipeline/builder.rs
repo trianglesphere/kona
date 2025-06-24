@@ -3,7 +3,7 @@
 use crate::{
     AttributesBuilder, AttributesQueue, BatchProvider, BatchStream, ChainProvider, ChannelProvider,
     ChannelReader, DataAvailabilityProvider, DerivationPipeline, FrameQueue, L1Retrieval,
-    L1Traversal, L2ChainProvider, ManagedTraversal, TraversalProvider,
+    L2ChainProvider, TraversalProvider,
 };
 use alloc::sync::Arc;
 use core::fmt::Debug;
@@ -141,13 +141,11 @@ where
         let attributes_builder = builder.builder.expect("builder must be set");
 
         // Compose the stage stack.
-        let mut l1_traversal = L1Traversal::new(chain_provider.clone(), Arc::clone(&rollup_config));
-        l1_traversal.block = Some(builder.origin.expect("origin must be set"));
-        let mut managed_traversal =
-            ManagedTraversal::new(chain_provider, Arc::clone(&rollup_config));
-        managed_traversal.block = Some(builder.origin.expect("origin must be set"));
-        let traversal_provider =
-            TraversalProvider::new(l1_traversal, managed_traversal, Arc::clone(&rollup_config));
+        let traversal_provider = TraversalProvider::new(
+            chain_provider,
+            Arc::clone(&rollup_config),
+            builder.origin.expect("origin must be set"),
+        );
         let l1_retrieval = L1Retrieval::new(traversal_provider, dap_source);
         let frame_queue = FrameQueue::new(l1_retrieval, Arc::clone(&rollup_config));
         let channel_provider = ChannelProvider::new(Arc::clone(&rollup_config), frame_queue);
