@@ -277,9 +277,9 @@ stages of the pipeline are as follows (from top down).</p>
 <ul>
 <li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.FrameQueue.html"><code>FrameQueue</code></a></li>
 <li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a></li>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a></li>
+<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a></li>
 </ul>
-<p>In this set of stages, the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage sits at the bottom.
+<p>In this set of stages, the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage sits at the bottom.
 It implements the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a> trait called the
 <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/trait.L1RetrievalProvider.html"><code>L1RetrievalProvider</code></a>. This provides generic methods that
 allow the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a> stage to call those methods on the generic
@@ -296,7 +296,7 @@ This trait is the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages
 // ...
 
 // We use the same "L1RetrievalProvider" trait here
-// in order to seamlessly use the `L1Traversal`
+// in order to seamlessly use the `IndexedTraversal` or `PollingTraversal`
 
 /// DapRetrieval stage
 #[derive(Debug)]
@@ -346,9 +346,9 @@ where
 // ..
 <span class="boring">}</span></code></pre></pre>
 <p>Notice, the <code>L1RetrievalProvider</code> is used as a trait bound so the
-<a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage can be used seamlessly as the "prev" stage in the pipeline.
+<a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage can be used seamlessly as the "prev" stage in the pipeline.
 Concretely, an instantiation of the <code>DapRetrieval</code> stage could be the following.</p>
-<pre><code>DapRetrieval&lt;L1Traversal&lt;..&gt;&gt;
+<pre><code>DapRetrieval&lt;IndexedTraversal&lt;..&gt;&gt;
 </code></pre>
 <!-- Links -->
 

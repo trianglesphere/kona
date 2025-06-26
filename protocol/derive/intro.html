@@ -314,7 +314,7 @@ the <a href="https://docs.rs/kona-derive/latest/kona_derive/pipeline/struct.Deri
 <ul>
 <li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a>
 <ul>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a></li>
+<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a></li>
 </ul>
 </li>
 </ul>
@@ -331,7 +331,7 @@ the <a href="https://docs.rs/kona-derive/latest/kona_derive/pipeline/struct.Deri
 </li>
 </ul>
 <p>Notice, from top to bottom, each stage owns the stage nested below it.
-Where the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage iterates over L1 data, the
+Where the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage iterates over L1 data, the
 <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.AttributesQueue.html"><code>AttributesQueue</code></a> stage produces
 <a href="https://docs.rs/op-alloy-rpc-types-engine/latest/op_alloy_rpc_types_engine/struct.OpAttributesWithParent.html"><code>OpAttributesWithParent</code></a>, creating a function that transforms
 L1 data into payload attributes.</p>

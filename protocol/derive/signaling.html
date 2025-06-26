@@ -334,7 +334,7 @@ notably, this is on the top-level <a href="https://docs.rs/kona-derive/latest/ko
 as all <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/index.html">the pipeline stages</a>.</p>
 <h4 id="an-example"><a class="header" href="#an-example">An Example</a></h4>
 <p>Let's create a new <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/enum.Signal.html"><code>Signal</code></a> variant that updates the <code>RollupConfig</code>
-in the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage. Let's call it <code>SetConfig</code>.
+in the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage. Let's call it <code>SetConfig</code>.
 The <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/enum.Signal.html"><code>signal</code></a> type would look like the following with this new
 variant.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -349,7 +349,7 @@ pub enum Signal {
     Activation(ActivationSignal),
     /// Flush the currently active channel.
     FlushChannel,
-    /// Updates the rollup config in the L1Traversal stage.
+    /// Updates the rollup config in the IndexedTraversal or PollingTraversal stage.
     UpdateConfig(ConfigUpdateSignal),
 }
 
@@ -359,11 +359,11 @@ pub struct ConfigUpdateSignal(Arc&lt;RollupConfig&gt;);
 <span class="boring">}</span></code></pre></pre>
 <p>Next, all handling of the <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/enum.Signal.html"><code>Signal</code></a> type needs to be updated for
 the new <code>UpdateConfig</code> variant. For the sake of this example, we'll just
-focus on updating the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage.</p>
+focus on updating the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[async_trait]
-impl&lt;F: ChainProvider + Send&gt; SignalReceiver for L1Traversal&lt;F&gt; {
+impl&lt;F: ChainProvider + Send&gt; SignalReceiver for IndexedTraversal&lt;F&gt; {
     async fn signal(&amp;mut self, signal: Signal) -&gt; PipelineResult&lt;()&gt; {
         match signal {
             Signal::Reset(ResetSignal { l1_origin, system_config, .. }) |

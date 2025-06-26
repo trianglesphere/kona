@@ -524,7 +524,7 @@ the <a href="https://docs.rs/kona-derive/latest/kona_derive/pipeline/struct.Deri
 <ul>
 <li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a>
 <ul>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a></li>
+<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a></li>
 </ul>
 </li>
 </ul>
@@ -541,7 +541,7 @@ the <a href="https://docs.rs/kona-derive/latest/kona_derive/pipeline/struct.Deri
 </li>
 </ul>
 <p>Notice, from top to bottom, each stage owns the stage nested below it.
-Where the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage iterates over L1 data, the
+Where the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage iterates over L1 data, the
 <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.AttributesQueue.html"><code>AttributesQueue</code></a> stage produces
 <a href="https://docs.rs/op-alloy-rpc-types-engine/latest/op_alloy_rpc_types_engine/struct.OpAttributesWithParent.html"><code>OpAttributesWithParent</code></a>, creating a function that transforms
 L1 data into payload attributes.</p>
@@ -981,9 +981,9 @@ stages of the pipeline are as follows (from top down).</p>
 <ul>
 <li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.FrameQueue.html"><code>FrameQueue</code></a></li>
 <li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a></li>
-<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a></li>
+<li><a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a></li>
 </ul>
-<p>In this set of stages, the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage sits at the bottom.
+<p>In this set of stages, the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage sits at the bottom.
 It implements the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a> trait called the
 <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/trait.L1RetrievalProvider.html"><code>L1RetrievalProvider</code></a>. This provides generic methods that
 allow the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Retrieval.html"><code>L1Retrieval</code></a> stage to call those methods on the generic
@@ -1000,7 +1000,7 @@ This trait is the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages
 // ...
 
 // We use the same "L1RetrievalProvider" trait here
-// in order to seamlessly use the `L1Traversal`
+// in order to seamlessly use the `IndexedTraversal` or `PollingTraversal`
 
 /// DapRetrieval stage
 #[derive(Debug)]
@@ -1050,9 +1050,9 @@ where
 // ..
 <span class="boring">}</span></code></pre></pre>
 <p>Notice, the <code>L1RetrievalProvider</code> is used as a trait bound so the
-<a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage can be used seamlessly as the "prev" stage in the pipeline.
+<a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage can be used seamlessly as the "prev" stage in the pipeline.
 Concretely, an instantiation of the <code>DapRetrieval</code> stage could be the following.</p>
-<pre><code>DapRetrieval&lt;L1Traversal&lt;..&gt;&gt;
+<pre><code>DapRetrieval&lt;IndexedTraversal&lt;..&gt;&gt;
 </code></pre>
 <!-- Links -->
 <div style="break-before: page; page-break-before: always;"></div><style>
@@ -1199,7 +1199,7 @@ notably, this is on the top-level <a href="https://docs.rs/kona-derive/latest/ko
 as all <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/index.html">the pipeline stages</a>.</p>
 <h4 id="an-example"><a class="header" href="#an-example">An Example</a></h4>
 <p>Let's create a new <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/enum.Signal.html"><code>Signal</code></a> variant that updates the <code>RollupConfig</code>
-in the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage. Let's call it <code>SetConfig</code>.
+in the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage. Let's call it <code>SetConfig</code>.
 The <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/enum.Signal.html"><code>signal</code></a> type would look like the following with this new
 variant.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1214,7 +1214,7 @@ pub enum Signal {
     Activation(ActivationSignal),
     /// Flush the currently active channel.
     FlushChannel,
-    /// Updates the rollup config in the L1Traversal stage.
+    /// Updates the rollup config in the IndexedTraversal or PollingTraversal stage.
     UpdateConfig(ConfigUpdateSignal),
 }
 
@@ -1224,11 +1224,11 @@ pub struct ConfigUpdateSignal(Arc&lt;RollupConfig&gt;);
 <span class="boring">}</span></code></pre></pre>
 <p>Next, all handling of the <a href="https://docs.rs/kona-derive/latest/kona_derive/traits/enum.Signal.html"><code>Signal</code></a> type needs to be updated for
 the new <code>UpdateConfig</code> variant. For the sake of this example, we'll just
-focus on updating the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.L1Traversal.html"><code>L1Traversal</code></a> stage.</p>
+focus on updating the <a href="https://docs.rs/kona-derive/latest/kona_derive/stages/struct.IndexedTraversal.html"><code>IndexedTraversal</code> or <code>PollingTraversal</code></a> stage.</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[async_trait]
-impl&lt;F: ChainProvider + Send&gt; SignalReceiver for L1Traversal&lt;F&gt; {
+impl&lt;F: ChainProvider + Send&gt; SignalReceiver for IndexedTraversal&lt;F&gt; {
     async fn signal(&amp;mut self, signal: Signal) -&gt; PipelineResult&lt;()&gt; {
         match signal {
             Signal::Reset(ResetSignal { l1_origin, system_config, .. }) |
