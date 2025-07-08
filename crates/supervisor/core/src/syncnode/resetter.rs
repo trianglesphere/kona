@@ -1,6 +1,6 @@
-use super::ManagedNodeClient;
+use super::{ManagedNodeClient, ManagedNodeError};
+use kona_supervisor_types::SuperHead;
 use alloy_eips::BlockNumHash;
-use kona_interop::SafetyLevel;
 use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader};
 use std::sync::Arc;
@@ -25,77 +25,43 @@ where
     }
 
     /// Resets the node using the latest super head.
-    pub(crate) async fn reset(&self) {
+    pub(crate) async fn reset(&self) -> Result<(), ManagedNodeError> {
         let _guard = self.reset_guard.lock().await;
 
         info!(target: "resetter", "Resetting the node");
 
-        let mut unsafe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::LocalUnsafe) {
-            Ok(val) => val,
-            Err(err) => {
-                error!(target: "resetter", %err, "Failed to get unsafe head ref");
-                return;
-            }
-        };
+        let super_head = self.db_provider.get_super_head().inspect_err(|err| {
+            error!(target: "resetter", %err, "Failed to get super head");
+        })?;
 
-        let mut cross_unsafe_ref =
-            match self.db_provider.get_safety_head_ref(SafetyLevel::CrossUnsafe) {
-                Ok(val) => val,
-                Err(err) => {
-                    error!(target: "resetter", %err, "Failed to get cross unsafe head ref");
-                    return;
-                }
-            };
+        let SuperHead {
+            mut local_unsafe,
+            mut cross_unsafe,
+            mut local_safe,
+            mut cross_safe,
+            mut finalized,
+            ..
+        } = super_head;
 
-        let mut local_safe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::LocalSafe)
-        {
-            Ok(val) => val,
-            Err(err) => {
-                error!(target: "resetter", %err, "Failed to get local safe head ref");
-                return;
-            }
-        };
+        let node_safe_ref = self
+            .client
+            .block_ref_by_number(local_safe.number)
+            .await
+            .inspect_err(|err| error!(target: "resetter", %err, "Failed to get block by number"))?;
 
-        let mut safe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::CrossSafe) {
-            Ok(val) => val,
-            Err(err) => {
-                error!(target: "resetter", %err, "Failed to get safe head ref");
-                return;
-            }
-        };
-
-        let mut finalised_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::Finalized) {
-            Ok(val) => val,
-            Err(err) => {
-                error!(target: "resetter", %err, "Failed to get finalised head ref");
-                return;
-            }
-        };
-
-        let node_safe_ref = match self.client.block_ref_by_number(local_safe_ref.number).await {
-            Ok(block) => block,
-            Err(err) => {
-                // todo: it's possible that supervisor is ahead of the op-node
-                // in this case we should handle the error gracefully
-                error!(target: "resetter", %err, "Failed to get block by number");
-                return;
-            }
-        };
-
-        // check with consistency with the op-node
         // todo: right now the assumption is that supervisor has the correct view of the canonical
         // chain
-        if node_safe_ref.hash != local_safe_ref.hash {
+        if node_safe_ref.hash != local_safe.hash {
             error!(target: "resetter", "Local safe ref hash does not match node safe ref hash");
 
             if let Ok(last_valid_derived_block) =
-                self.get_last_valid_derived_block(local_safe_ref.id()).await
+                self.get_last_valid_derived_block(local_safe.id()).await
             {
-                unsafe_ref = last_valid_derived_block;
-                local_safe_ref = last_valid_derived_block;
+                local_unsafe = last_valid_derived_block;
+                local_safe = last_valid_derived_block;
 
-                for ref_block in [&mut finalised_ref, &mut safe_ref, &mut cross_unsafe_ref] {
-                    if ref_block.number > local_safe_ref.number {
+                for ref_block in [&mut finalized, &mut cross_safe, &mut cross_unsafe] {
+                    if ref_block.number > local_safe.number {
                         *ref_block = last_valid_derived_block;
                     }
                 }
@@ -103,27 +69,28 @@ where
         }
 
         info!(target: "resetter",
-            %unsafe_ref,
-            %cross_unsafe_ref,
-            %local_safe_ref,
-            %safe_ref,
-            %finalised_ref,
+            %local_unsafe,
+            %cross_unsafe,
+            %local_safe,
+            %cross_safe,
+            %finalized,
             "Resetting managed node with latest information",
         );
 
-        if let Err(err) = self
-            .client
+        self.client
             .reset(
-                unsafe_ref.id(),
-                cross_unsafe_ref.id(),
-                local_safe_ref.id(),
-                safe_ref.id(),
-                finalised_ref.id(),
+                local_unsafe.id(),
+                cross_unsafe.id(),
+                local_safe.id(),
+                cross_safe.id(),
+                finalized.id(),
             )
             .await
-        {
-            error!(target: "resetter", %err, "Failed to reset managed node");
-        }
+            .inspect_err(|err| {
+                error!(target: "resetter", %err, "Failed to reset managed node");
+            })?;
+
+        Ok(())
     }
 
     /// Gets the last valid derived block by walking back the source blocks and checking the hash of
@@ -183,7 +150,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::syncnode::ManagedNodeError;
+    use crate::syncnode::{AuthenticationError, ManagedNodeError};
     use alloy_eips::BlockNumHash;
     use alloy_primitives::{B256, ChainId};
     use async_trait::async_trait;
@@ -200,7 +167,6 @@ mod tests {
         pub Db {}
 
         impl HeadRefStorageReader for Db {
-            fn get_current_l1(&self) -> Result<BlockInfo, StorageError>;
             fn get_safety_head_ref(&self, level: SafetyLevel) -> Result<BlockInfo, StorageError>;
             fn get_super_head(&self) -> Result<SuperHead, StorageError>;
         }
@@ -249,21 +215,7 @@ mod tests {
         let super_head = make_super_head();
 
         let mut db = MockDb::new();
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalUnsafe)
-            .returning(move |_| Ok(super_head.local_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossUnsafe)
-            .returning(move |_| Ok(super_head.cross_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalSafe)
-            .returning(move |_| Ok(super_head.local_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossSafe)
-            .returning(move |_| Ok(super_head.cross_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::Finalized)
-            .returning(move |_| Ok(super_head.finalized));
+        db.expect_get_super_head().returning(move || Ok(super_head));
 
         let mut client = MockClient::new();
         client.expect_block_ref_by_number().returning(move |_| Ok(super_head.local_safe));
@@ -272,23 +224,19 @@ mod tests {
 
         let resetter = Resetter::new(Arc::new(client), Arc::new(db));
 
-        resetter.reset().await;
-        // You can assert logs or side effects if needed
+        assert!(resetter.reset().await.is_ok());
     }
 
     #[tokio::test]
     async fn test_reset_db_error() {
         let mut db = MockDb::new();
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalUnsafe)
-            .returning(move |_| Err(StorageError::DatabaseNotInitialised));
+        db.expect_get_super_head().returning(|| Err(StorageError::DatabaseNotInitialised));
 
         let client = MockClient::new();
 
         let resetter = Resetter::new(Arc::new(client), Arc::new(db));
 
-        resetter.reset().await;
-        // Should return early, no panic
+        assert!(resetter.reset().await.is_err());
     }
 
     #[tokio::test]
@@ -296,53 +244,37 @@ mod tests {
         let super_head = make_super_head();
 
         let mut db = MockDb::new();
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalUnsafe)
-            .returning(move |_| Ok(super_head.local_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossUnsafe)
-            .returning(move |_| Ok(super_head.cross_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalSafe)
-            .returning(move |_| Ok(super_head.local_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossSafe)
-            .returning(move |_| Ok(super_head.cross_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::Finalized)
-            .returning(move |_| Ok(super_head.finalized));
+        db.expect_get_super_head().returning(move || Ok(super_head));
 
         let mut client = MockClient::new();
-        client
-            .expect_block_ref_by_number()
-            .returning(|_| Err(ManagedNodeError::DatabaseNotInitialised));
+        client.expect_block_ref_by_number().returning(|_| {
+            Err(ManagedNodeError::Authentication(AuthenticationError::InvalidHeader))
+        });
 
         let resetter = Resetter::new(Arc::new(client), Arc::new(db));
 
-        resetter.reset().await;
-        // Should return early, no panic
+        assert!(resetter.reset().await.is_err());
     }
 
     #[tokio::test]
-    async fn test_reset_consistency_error() {
+    async fn test_reset_inconsistency() {
         let super_head = make_super_head();
 
         let mut db = MockDb::new();
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalUnsafe)
-            .returning(move |_| Ok(super_head.local_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossUnsafe)
-            .returning(move |_| Ok(super_head.cross_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalSafe)
-            .returning(move |_| Ok(super_head.local_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossSafe)
-            .returning(move |_| Ok(super_head.cross_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::Finalized)
-            .returning(move |_| Ok(super_head.finalized));
+        db.expect_get_super_head().returning(move || Ok(super_head));
+
+        let prev_source_block = BlockInfo::new(B256::from([8u8; 32]), 101, B256::ZERO, 0);
+        let current_source_block =
+            BlockInfo::new(B256::from([7u8; 32]), 102, prev_source_block.hash, 0);
+        let last_valid_derived_block = BlockInfo::new(B256::from([6u8; 32]), 9, B256::ZERO, 0);
+
+        // return expected values when get_last_valid_derived_block() is called
+        db.expect_derived_to_source()
+            .with(predicate::eq(super_head.local_safe.id()))
+            .returning(move |_| Ok(current_source_block));
+        db.expect_latest_derived_block_at_source()
+            .with(predicate::eq(prev_source_block.id()))
+            .returning(move |_| Ok(last_valid_derived_block));
 
         let prev_source_block = BlockInfo::new(B256::from([8u8; 32]), 101, B256::ZERO, 0);
         let current_source_block =
@@ -382,8 +314,7 @@ mod tests {
 
         let resetter = Resetter::new(Arc::new(client), Arc::new(db));
 
-        resetter.reset().await;
-        // Should return early, no panic
+        assert!(resetter.reset().await.is_ok());
     }
 
     #[tokio::test]
@@ -391,31 +322,16 @@ mod tests {
         let super_head = make_super_head();
 
         let mut db = MockDb::new();
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalUnsafe)
-            .returning(move |_| Ok(super_head.local_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossUnsafe)
-            .returning(move |_| Ok(super_head.cross_unsafe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::LocalSafe)
-            .returning(move |_| Ok(super_head.local_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::CrossSafe)
-            .returning(move |_| Ok(super_head.cross_safe));
-        db.expect_get_safety_head_ref()
-            .withf(|level| *level == SafetyLevel::Finalized)
-            .returning(move |_| Ok(super_head.finalized));
+        db.expect_get_super_head().returning(move || Ok(super_head));
 
         let mut client = MockClient::new();
         client.expect_block_ref_by_number().returning(move |_| Ok(super_head.local_safe));
-        client
-            .expect_reset()
-            .returning(|_, _, _, _, _| Err(ManagedNodeError::DatabaseNotInitialised));
+        client.expect_reset().returning(|_, _, _, _, _| {
+            Err(ManagedNodeError::Authentication(AuthenticationError::InvalidJwt))
+        });
 
         let resetter = Resetter::new(Arc::new(client), Arc::new(db));
 
-        resetter.reset().await;
-        // Should log error, no panic
+        assert!(resetter.reset().await.is_err());
     }
 }
