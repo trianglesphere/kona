@@ -192,8 +192,7 @@ mod tests {
     use kona_protocol::BlockInfo;
     use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, StorageError};
     use kona_supervisor_types::{OutputV0, Receipts, SubscriptionEvent, SuperHead};
-    use mockall::mock;
-    use mockall::predicate;
+    use mockall::{mock, predicate};
 
     // Mock for HeadRefStorageReader
     mock! {
@@ -346,7 +345,8 @@ mod tests {
             .returning(move |_| Ok(super_head.finalized));
 
         let prev_source_block = BlockInfo::new(B256::from([8u8; 32]), 101, B256::ZERO, 0);
-        let current_source_block = BlockInfo::new(B256::from([7u8; 32]), 102, prev_source_block.hash, 0);
+        let current_source_block =
+            BlockInfo::new(B256::from([7u8; 32]), 102, prev_source_block.hash, 0);
         let last_valid_derived_block = BlockInfo::new(B256::from([6u8; 32]), 9, B256::ZERO, 0);
 
         // return expected values when get_last_valid_derived_block() is called
@@ -376,7 +376,7 @@ mod tests {
                 predicate::eq(super_head.cross_unsafe.id()),
                 predicate::eq(last_valid_derived_block.id()),
                 predicate::eq(super_head.cross_safe.id()),
-                predicate::eq(super_head.finalized.id())
+                predicate::eq(super_head.finalized.id()),
             )
             .returning(|_, _, _, _, _| Ok(()));
 
