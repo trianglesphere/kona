@@ -1,8 +1,8 @@
 use super::{ManagedNodeClient, ManagedNodeError};
-use kona_supervisor_types::SuperHead;
 use alloy_eips::BlockNumHash;
 use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader};
+use kona_supervisor_types::SuperHead;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -43,11 +43,10 @@ where
             ..
         } = super_head;
 
-        let node_safe_ref = self
-            .client
-            .block_ref_by_number(local_safe.number)
-            .await
-            .inspect_err(|err| error!(target: "resetter", %err, "Failed to get block by number"))?;
+        let node_safe_ref =
+            self.client.block_ref_by_number(local_safe.number).await.inspect_err(
+                |err| error!(target: "resetter", %err, "Failed to get block by number"),
+            )?;
 
         // todo: right now the assumption is that supervisor has the correct view of the canonical
         // chain
