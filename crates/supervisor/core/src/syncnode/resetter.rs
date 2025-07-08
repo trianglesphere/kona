@@ -1,6 +1,8 @@
 use super::ManagedNodeClient;
+use alloy_eips::BlockNumHash;
 use kona_interop::SafetyLevel;
-use kona_supervisor_storage::HeadRefStorageReader;
+use kona_protocol::BlockInfo;
+use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{error, info};
@@ -14,7 +16,7 @@ pub(super) struct Resetter<DB, C> {
 
 impl<DB, C> Resetter<DB, C>
 where
-    DB: HeadRefStorageReader + Send + Sync + 'static,
+    DB: HeadRefStorageReader + DerivationStorageReader + Send + Sync + 'static,
     C: ManagedNodeClient + Send + Sync + 'static,
 {
     /// Creates a new [`Resetter`] with the specified client.
@@ -28,7 +30,7 @@ where
 
         info!(target: "resetter", "Resetting the node");
 
-        let unsafe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::LocalUnsafe) {
+        let mut unsafe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::LocalUnsafe) {
             Ok(val) => val,
             Err(err) => {
                 error!(target: "resetter", %err, "Failed to get unsafe head ref");
@@ -36,16 +38,17 @@ where
             }
         };
 
-        let cross_unsafe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::CrossUnsafe)
-        {
-            Ok(val) => val,
-            Err(err) => {
-                error!(target: "resetter", %err, "Failed to get cross unsafe head ref");
-                return;
-            }
-        };
+        let mut cross_unsafe_ref =
+            match self.db_provider.get_safety_head_ref(SafetyLevel::CrossUnsafe) {
+                Ok(val) => val,
+                Err(err) => {
+                    error!(target: "resetter", %err, "Failed to get cross unsafe head ref");
+                    return;
+                }
+            };
 
-        let local_safe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::LocalSafe) {
+        let mut local_safe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::LocalSafe)
+        {
             Ok(val) => val,
             Err(err) => {
                 error!(target: "resetter", %err, "Failed to get local safe head ref");
@@ -53,7 +56,7 @@ where
             }
         };
 
-        let safe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::CrossSafe) {
+        let mut safe_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::CrossSafe) {
             Ok(val) => val,
             Err(err) => {
                 error!(target: "resetter", %err, "Failed to get safe head ref");
@@ -61,7 +64,7 @@ where
             }
         };
 
-        let finalised_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::Finalized) {
+        let mut finalised_ref = match self.db_provider.get_safety_head_ref(SafetyLevel::Finalized) {
             Ok(val) => val,
             Err(err) => {
                 error!(target: "resetter", %err, "Failed to get finalised head ref");
@@ -80,10 +83,23 @@ where
         };
 
         // check with consistency with the op-node
+        // todo: right now the assumption is that supervisor has the correct view of the canonical
+        // chain
         if node_safe_ref.hash != local_safe_ref.hash {
-            // todo: handle this case
             error!(target: "resetter", "Local safe ref hash does not match node safe ref hash");
-            return;
+
+            if let Ok(last_valid_derived_block) =
+                self.get_last_valid_derived_block(local_safe_ref.id()).await
+            {
+                unsafe_ref = last_valid_derived_block;
+                local_safe_ref = last_valid_derived_block;
+
+                for ref_block in [&mut finalised_ref, &mut safe_ref, &mut cross_unsafe_ref] {
+                    if ref_block.number > local_safe_ref.number {
+                        *ref_block = last_valid_derived_block;
+                    }
+                }
+            }
         }
 
         info!(target: "resetter",
@@ -109,6 +125,59 @@ where
             error!(target: "resetter", %err, "Failed to reset managed node");
         }
     }
+
+    /// Gets the last valid derived block by walking back the source blocks and checking the hash of
+    /// the last derived block at the source block.
+    async fn get_last_valid_derived_block(
+        &self,
+        mut derived_block_id: BlockNumHash,
+    ) -> Result<BlockInfo, ()> {
+        loop {
+            let source_block =
+                self.db_provider.derived_to_source(derived_block_id).map_err(|err| {
+                    error!(
+                        target: "resetter",
+                        %err,
+                        derived_block_number = derived_block_id.number,
+                        "Failed to get source block for the derived block",
+                    );
+                })?;
+
+            let prev_source_block =
+                BlockNumHash::new(source_block.number - 1, source_block.parent_hash);
+
+            let prev_source_latest_derived = self
+                .db_provider
+                .latest_derived_block_at_source(prev_source_block)
+                .map_err(|err| {
+                    error!(
+                        target: "resetter",
+                        %err,
+                        prev_source_block_number = prev_source_block.number,
+                        "Failed to get latest derived block for the previous source block",
+                    );
+                })?;
+
+            let node_block =
+                match self.client.block_ref_by_number(prev_source_latest_derived.number).await {
+                    Ok(block) => block,
+                    Err(err) => {
+                        error!(
+                            target: "resetter",
+                            %err,
+                            "Failed to get block by number from managed node",
+                        );
+                        return Err(());
+                    }
+                };
+
+            if node_block.hash == prev_source_latest_derived.hash {
+                return Ok(prev_source_latest_derived);
+            } else {
+                derived_block_id = prev_source_latest_derived.id();
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -119,9 +188,9 @@ mod tests {
     use alloy_primitives::{B256, ChainId};
     use async_trait::async_trait;
     use jsonrpsee::core::client::Subscription;
-    use kona_interop::SafetyLevel;
+    use kona_interop::{DerivedRefPair, SafetyLevel};
     use kona_protocol::BlockInfo;
-    use kona_supervisor_storage::{HeadRefStorageReader, StorageError};
+    use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, StorageError};
     use kona_supervisor_types::{OutputV0, Receipts, SubscriptionEvent, SuperHead};
     use mockall::mock;
 
@@ -134,6 +203,12 @@ mod tests {
             fn get_current_l1(&self) -> Result<BlockInfo, StorageError>;
             fn get_safety_head_ref(&self, level: SafetyLevel) -> Result<BlockInfo, StorageError>;
             fn get_super_head(&self) -> Result<SuperHead, StorageError>;
+        }
+
+        impl DerivationStorageReader for Db {
+            fn derived_to_source(&self, derived_block_id: BlockNumHash) -> Result<BlockInfo, StorageError>;
+            fn latest_derived_block_at_source(&self, source_block_id: BlockNumHash) -> Result<BlockInfo, StorageError>;
+            fn latest_derivation_state(&self) -> Result<DerivedRefPair, StorageError>;
         }
     }
 
