@@ -1,7 +1,9 @@
 use super::{ChainProcessorError, ChainProcessorTask};
-use crate::{event::ChainEvent, syncnode::ManagedNodeProvider};
+use crate::{config::RollupConfig, event::ChainEvent, syncnode::ManagedNodeProvider};
 use alloy_primitives::ChainId;
-use kona_supervisor_storage::{DerivationStorageWriter, HeadRefStorageWriter, LogStorageWriter};
+use kona_supervisor_storage::{
+    DerivationStorageWriter, HeadRefStorageWriter, LogStorageReader, LogStorageWriter,
+};
 use std::sync::Arc;
 use tokio::{
     sync::{Mutex, mpsc},
@@ -16,6 +18,9 @@ use tracing::warn;
 // chain processor will support multiple managed nodes in the future.
 #[derive(Debug)]
 pub struct ChainProcessor<P, W> {
+    // The rollup configuration for the chain
+    rollup_config: RollupConfig,
+
     // The chainId that this processor is associated with
     chain_id: ChainId,
 
@@ -41,10 +46,15 @@ pub struct ChainProcessor<P, W> {
 impl<P, W> ChainProcessor<P, W>
 where
     P: ManagedNodeProvider + 'static,
-    W: LogStorageWriter + DerivationStorageWriter + HeadRefStorageWriter + 'static,
+    W: LogStorageWriter
+        + LogStorageReader
+        + DerivationStorageWriter
+        + HeadRefStorageWriter
+        + 'static,
 {
     /// Creates a new instance of [`ChainProcessor`].
     pub fn new(
+        rollup_config: RollupConfig,
         chain_id: ChainId,
         managed_node: Arc<P>,
         state_manager: Arc<W>,
@@ -52,6 +62,7 @@ where
     ) -> Self {
         // todo: validate chain_id against managed_node
         Self {
+            rollup_config,
             chain_id,
             event_tx: None,
             metrics_enabled: None,
@@ -88,11 +99,12 @@ where
         }
 
         // todo: figure out value for buffer size
-        let (event_tx, event_rx) = mpsc::channel::<ChainEvent>(100);
+        let (event_tx, event_rx) = mpsc::channel::<ChainEvent>(1000);
         self.event_tx = Some(event_tx.clone());
         self.managed_node.start_subscription(event_tx.clone()).await?;
 
         let mut task = ChainProcessorTask::new(
+            self.rollup_config.clone(),
             self.chain_id,
             self.managed_node.clone(),
             self.state_manager.clone(),
@@ -118,8 +130,8 @@ mod tests {
     use crate::{
         event::ChainEvent,
         syncnode::{
-            ManagedNodeController, ManagedNodeDataProvider, ManagedNodeError, NodeSubscriber,
-            ReceiptProvider,
+            BlockProvider, ManagedNodeController, ManagedNodeDataProvider, ManagedNodeError,
+            NodeSubscriber,
         },
     };
     use alloy_primitives::B256;
@@ -161,9 +173,13 @@ mod tests {
     }
 
     #[async_trait]
-    impl ReceiptProvider for MockNode {
+    impl BlockProvider for MockNode {
         async fn fetch_receipts(&self, _block_hash: B256) -> Result<Receipts, ManagedNodeError> {
             Ok(vec![]) // dummy
+        }
+
+        async fn block_by_number(&self, _number: u64) -> Result<BlockInfo, ManagedNodeError> {
+            Ok(BlockInfo::default())
         }
     }
 
@@ -225,6 +241,11 @@ mod tests {
         pub Db {}
 
         impl LogStorageWriter for Db {
+            fn initialise_log_storage(
+                &self,
+                block: BlockInfo,
+            ) -> Result<(), StorageError>;
+
             fn store_block_logs(
                 &self,
                 block: &BlockInfo,
@@ -232,7 +253,19 @@ mod tests {
             ) -> Result<(), StorageError>;
         }
 
+         impl LogStorageReader for Db {
+            fn get_block(&self, block_number: u64) -> Result<BlockInfo, StorageError>;
+            fn get_latest_block(&self) -> Result<BlockInfo, StorageError>;
+            fn get_log(&self,block_number: u64,log_index: u32) -> Result<Log, StorageError>;
+            fn get_logs(&self, block_number: u64) -> Result<Vec<Log>, StorageError>;
+        }
+
         impl DerivationStorageWriter for Db {
+            fn initialise_derivation_storage(
+                &self,
+                incoming_pair: DerivedRefPair,
+            ) -> Result<(), StorageError>;
+
             fn save_derived_block(
                 &self,
                 incoming_pair: DerivedRefPair,
@@ -268,8 +301,14 @@ mod tests {
         let storage = Arc::new(MockDb::new());
         let cancel_token = CancellationToken::new();
 
-        let mut processor =
-            ChainProcessor::new(1, Arc::clone(&mock_node), Arc::clone(&storage), cancel_token);
+        let rollup_config = RollupConfig::default();
+        let mut processor = ChainProcessor::new(
+            rollup_config,
+            1,
+            Arc::clone(&mock_node),
+            Arc::clone(&storage),
+            cancel_token,
+        );
 
         assert!(processor.start().await.is_ok());
 
