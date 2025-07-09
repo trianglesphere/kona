@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
 	"testing"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
@@ -53,4 +54,32 @@ func TestL2CLResync(gt *testing.T) {
 	)
 
 	// supervisor successfully connected with managed L2CLs
+}
+
+// TestSupervisorResync checks that unsafe head advances after restarting the Supervisor.
+func TestSupervisorResync(gt *testing.T) {
+	t := devtest.SerialT(gt)
+	sys := presets.NewSimpleInterop(t)
+	logger := sys.Log.With("Test", "TestSupervisorResync")
+
+	logger.Info("Check unsafe chains are advancing")
+
+	for _, level := range []types.SafetyLevel{types.LocalUnsafe, types.LocalSafe, types.CrossUnsafe, types.CrossSafe} {
+		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainA.ChainID(), 2, level, 10)
+		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainB.ChainID(), 2, level, 10)
+	}
+
+	logger.Info("Stop Supervisor node")
+	sys.Supervisor.Stop()
+
+	logger.Info("Restart Supervisor node")
+	sys.Supervisor.Start()
+
+	logger.Info("Boot up Supervisor node")
+
+	// Re check syncing is not blocked
+	for _, level := range []types.SafetyLevel{types.LocalUnsafe, types.LocalSafe, types.CrossUnsafe, types.CrossSafe} {
+		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainA.ChainID(), 2, level, 20)
+		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainB.ChainID(), 2, level, 20)
+	}
 }
