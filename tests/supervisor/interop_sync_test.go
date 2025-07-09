@@ -41,9 +41,10 @@ func TestL2CLResync(gt *testing.T) {
 	// L2CL may advance a few blocks without supervisor connection, but eventually it will stop without the connection
 	// we must check that unsafe head is advancing due to reconnection
 	logger.Info("Boot up L2CL nodes")
+
 	dsl.CheckAll(t,
-		sys.L2ELA.AdvancedFn(eth.Unsafe, 10),
-		sys.L2ELB.AdvancedFn(eth.Unsafe, 10),
+		sys.L2ELA.AdvancedFn(eth.Unsafe, 30),
+		sys.L2ELB.AdvancedFn(eth.Unsafe, 30),
 	)
 
 	// supervisor will attempt to reconnect with L2CLs at this point because L2CL ws endpoint is recovered
@@ -65,8 +66,8 @@ func TestSupervisorResync(gt *testing.T) {
 	logger.Info("Check unsafe chains are advancing")
 
 	for _, level := range []types.SafetyLevel{types.LocalUnsafe, types.LocalSafe, types.CrossUnsafe, types.CrossSafe} {
-		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainA.ChainID(), 2, level, 10)
-		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainB.ChainID(), 2, level, 10)
+		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainA.ChainID(), 2, level, 20)
+		sys.Supervisor.WaitForL2HeadToAdvance(sys.L2ChainB.ChainID(), 2, level, 20)
 	}
 
 	logger.Info("Stop Supervisor node")

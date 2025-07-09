@@ -5,7 +5,7 @@ use alloy_primitives::B256;
 use async_trait::async_trait;
 use kona_protocol::BlockInfo;
 use kona_supervisor_types::{OutputV0, Receipts};
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::mpsc;
 
 /// Represents a node that can subscribe to L2 events from the chain.
@@ -23,7 +23,7 @@ pub trait NodeSubscriber: Send + Sync {
     /// * `Ok(())` on successful subscription
     /// * `Err(ManagedNodeError)` if subscription setup fails
     async fn start_subscription(
-        &self,
+        self: Arc<Self>,
         event_tx: mpsc::Sender<ChainEvent>,
     ) -> Result<(), ManagedNodeError>;
 }

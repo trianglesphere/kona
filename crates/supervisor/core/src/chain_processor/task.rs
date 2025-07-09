@@ -432,7 +432,7 @@ mod tests {
         #[async_trait]
         impl NodeSubscriber for Node {
             async fn start_subscription(
-                &self,
+                self: Arc<Self>,
                 _event_tx: mpsc::Sender<ChainEvent>,
             ) -> Result<(), ManagedNodeError>;
         }

@@ -7,9 +7,12 @@ use alloy_rpc_types_eth::BlockNumHash;
 use async_trait::async_trait;
 use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, LogStorageReader};
-use kona_supervisor_types::{OutputV0, Receipts};
+use kona_supervisor_types::{OutputV0, Receipts, spawn_task_with_retry};
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use tokio::{
+    sync::{Mutex, mpsc},
+    task::JoinHandle,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -34,7 +37,7 @@ pub struct ManagedNode<DB, C> {
     /// Cancellation token to stop the processor
     cancel_token: CancellationToken,
     /// Handle to the async subscription task
-    task_handle: Mutex<bool>,
+    task_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl<DB, C> ManagedNode<DB, C>
@@ -51,7 +54,7 @@ where
     ) -> Self {
         let resetter = Arc::new(Resetter::new(client.clone(), db_provider));
 
-        Self { client, resetter, cancel_token, task_handle: Mutex::new(false), l1_provider }
+        Self { client, resetter, cancel_token, task_handle: Mutex::new(None), l1_provider }
     }
 
     /// Returns the [`ChainId`] of the [`ManagedNode`].
@@ -73,97 +76,93 @@ where
     /// Establishes a WebSocket connection and subscribes to node events.
     /// Spawns a background task to process incoming events.
     async fn start_subscription(
-        &self,
+        self: Arc<Self>,
         event_tx: mpsc::Sender<ChainEvent>,
     ) -> Result<(), ManagedNodeError> {
-        let mut running = self.task_handle.lock().await;
-        if *running {
-            error!(
-                target: "managed_node",
-                "Failed to subscribe to events as it is running"
-            );
-            return Err(SubscriptionError::AlreadyActive)?;
+        let chain_id = self.chain_id().await?;
+        let mut task_handle_guard = self.task_handle.lock().await;
+        if task_handle_guard.is_some() {
+            Err(SubscriptionError::AlreadyActive)?
         }
 
-        let mut subscription = self.client.subscribe_events().await.inspect_err(|err| {
-            error!(
-                target: "managed_node",
-                %err,
-                "Failed to subscribe to events"
-            );
-        })?;
-
-        let cancel_token = self.cancel_token.clone();
-
-        // Creates a task instance to sort and process the events from the subscription
-        let task = ManagedEventTask::new(
+        let task = Arc::new(ManagedEventTask::new(
             self.client.clone(),
             self.l1_provider.clone(),
             self.resetter.clone(),
-            event_tx,
-        );
+            event_tx.clone(),
+        ));
 
-        *running = true; // mark as running
-        drop(running); // release the lock early
+        let node = self.clone();
 
-        let client = Arc::clone(&self.client);
+        // spawn a task which will be retried in failures
+        let handle = spawn_task_with_retry(
+            move || {
+                let node = node.clone();
+                let task = task.clone();
+                async move {
+                    let mut subscription =
+                        node.client.subscribe_events().await.inspect_err(|err| {
+                            error!(
+                                target: "managed_node",
+                                %chain_id,
+                                %err,
+                                "Failed to subscribe to events"
+                            );
+                        })?;
 
-        // Start background task to handle events
-        let handle = tokio::spawn(async move {
-            info!(target: "managed_node", "Subscription task started");
-            loop {
-                tokio::select! {
-                    // Listen for stop signal
-                    _ = cancel_token.cancelled() => {
-                        info!(target: "managed_node", "Cancellation token triggered, shutting down subscription");
-                        break;
-                    }
-
-                    // Listen for events from subscription
-                    incoming_event = subscription.next() => {
-                        match incoming_event {
-                            Some(Ok(subscription_event)) => {
-                                task.handle_managed_event(subscription_event.data).await;
-                            }
-                            Some(Err(err)) => {
-                                error!(
-                                    target: "managed_node",
-                                    %err,
-                                    "Error in event deserialization"
-                                );
-                        // Continue processing next events despite this error
-                            }
-                            None => {
-                                // Subscription closed by the server
-                                warn!(target: "managed_node", "Subscription closed by server");
-
-                                // This can happen if the underlying ws-client got disconnected.
-                                // We need to set the client to None so that it can be initiated again.
-                                client.reset_ws_client().await;
-                                break;
+                    let handle = tokio::spawn(async move {
+                        info!(target: "managed_node", %chain_id, "Subscription task started");
+                        loop {
+                            tokio::select! {
+                                _ = node.cancel_token.cancelled() => {
+                                    info!(target: "managed_node", %chain_id, "Cancellation token triggered, shutting down subscription");
+                                    break;
+                                }
+                                incoming_event = subscription.next() => {
+                                    match incoming_event {
+                                        Some(Ok(subscription_event)) => {
+                                            task.handle_managed_event(subscription_event.data).await;
+                                        }
+                                        Some(Err(err)) => {
+                                            error!(
+                                                target: "managed_node",
+                                                %chain_id,
+                                                %err,
+                                                "Error in event deserialization"
+                                            );
+                                        }
+                                        None => {
+                                            warn!(target: "managed_node",%chain_id, "Subscription closed by server");
+                                            node.client.reset_ws_client().await;
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }
+
+                        if let Err(err) = subscription.unsubscribe().await {
+                            warn!(
+                                target: "managed_node",
+                                %chain_id,
+                                %err,
+                                "Failed to unsubscribe gracefully"
+                            );
+                        }
+
+                        info!(target: "managed_node", %chain_id, "Subscription task finished");
+                    });
+
+                    let _ = handle.await;
+
+                    Ok::<_, ManagedNodeError>(())
                 }
-            }
+            },
+            self.cancel_token.clone(),
+            usize::MAX,
+        );
 
-            // Try to unsubscribe gracefully
-            if let Err(err) = subscription.unsubscribe().await {
-                warn!(
-                    target: "managed_node",
-                    %err,
-                    "Failed to unsubscribe gracefully"
-                );
-            }
-
-            info!(target: "managed_node", "Subscription task finished");
-        });
-
-        let _ = handle.await;
-
-        // Task done
-        let mut running = self.task_handle.lock().await;
-        *running = false;
+        *task_handle_guard = Some(handle);
 
         Ok(())
     }

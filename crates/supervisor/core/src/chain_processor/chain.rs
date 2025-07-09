@@ -4,7 +4,6 @@ use alloy_primitives::ChainId;
 use kona_supervisor_storage::{
     DerivationStorageWriter, HeadRefStorageWriter, LogStorageReader, LogStorageWriter,
 };
-use kona_supervisor_types::spawn_task_with_retry;
 use std::sync::Arc;
 use tokio::{
     sync::{Mutex, mpsc},
@@ -97,18 +96,7 @@ where
         // todo: figure out value for buffer size
         let (event_tx, event_rx) = mpsc::channel::<ChainEvent>(100);
         self.event_tx = Some(event_tx.clone());
-
-        let node = self.managed_node.clone();
-
-        spawn_task_with_retry(
-            move || {
-                let node = node.clone();
-                let tx = event_tx.clone();
-                async move { node.start_subscription(tx).await }
-            },
-            self.cancel_token.clone(),
-            usize::MAX,
-        );
+        self.managed_node.clone().start_subscription(event_tx.clone()).await?;
 
         let mut task = ChainProcessorTask::new(
             self.chain_id,
@@ -170,7 +158,7 @@ mod tests {
     #[async_trait]
     impl NodeSubscriber for MockNode {
         async fn start_subscription(
-            &self,
+            self: Arc<Self>,
             _tx: mpsc::Sender<ChainEvent>,
         ) -> Result<(), ManagedNodeError> {
             self.subscribed.store(true, Ordering::SeqCst);
