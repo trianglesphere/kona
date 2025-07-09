@@ -56,7 +56,7 @@ func TestL2CLResync(gt *testing.T) {
 	// supervisor successfully connected with managed L2CLs
 }
 
-// TestSupervisorResync checks that unsafe head advances after restarting the Supervisor.
+// TestSupervisorResync checks that heads advances after restarting the Supervisor.
 func TestSupervisorResync(gt *testing.T) {
 	t := devtest.SerialT(gt)
 	sys := presets.NewSimpleInterop(t)
