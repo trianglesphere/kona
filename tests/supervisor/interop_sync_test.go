@@ -1,13 +1,13 @@
 package supervisor
 
 import (
-	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
 	"testing"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
 	"github.com/ethereum-optimism/optimism/op-devstack/dsl"
 	"github.com/ethereum-optimism/optimism/op-devstack/presets"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
+	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
 )
 
 // TestL2CLResync checks that unsafe head advances after restarting L2CL.
