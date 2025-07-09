@@ -2,6 +2,7 @@ use super::{ChainProcessorError, ChainProcessorTask};
 use crate::{event::ChainEvent, syncnode::ManagedNodeProvider};
 use alloy_primitives::ChainId;
 use kona_supervisor_storage::{DerivationStorageWriter, HeadRefStorageWriter, LogStorageWriter};
+use kona_supervisor_types::spawn_task_with_retry;
 use std::sync::Arc;
 use tokio::{
     sync::{Mutex, mpsc},
@@ -90,7 +91,18 @@ where
         // todo: figure out value for buffer size
         let (event_tx, event_rx) = mpsc::channel::<ChainEvent>(100);
         self.event_tx = Some(event_tx.clone());
-        self.managed_node.start_subscription(event_tx.clone()).await?;
+
+        let node = self.managed_node.clone();
+
+        spawn_task_with_retry(
+            move || {
+                let node = node.clone();
+                let tx = event_tx.clone();
+                async move { node.start_subscription(tx).await }
+            },
+            self.cancel_token.clone(),
+            usize::MAX,
+        );
 
         let mut task = ChainProcessorTask::new(
             self.chain_id,

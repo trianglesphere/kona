@@ -9,10 +9,7 @@ use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, LogStorageReader};
 use kona_supervisor_types::{OutputV0, Receipts};
 use std::sync::Arc;
-use tokio::{
-    sync::{Mutex, mpsc},
-    task::JoinHandle,
-};
+use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -36,7 +33,7 @@ pub struct ManagedNode<DB, C> {
     /// Cancellation token to stop the processor
     cancel_token: CancellationToken,
     /// Handle to the async subscription task
-    task_handle: Mutex<Option<JoinHandle<()>>>,
+    task_handle: Mutex<bool>,
 }
 
 impl<DB, C> ManagedNode<DB, C>
@@ -53,7 +50,7 @@ where
     ) -> Self {
         let resetter = Arc::new(Resetter::new(client.clone(), db_provider));
 
-        Self { client, resetter, cancel_token, task_handle: Mutex::new(None), l1_provider }
+        Self { client, resetter, cancel_token, task_handle: Mutex::new(false), l1_provider }
     }
 
     /// Returns the [`ChainId`] of the [`ManagedNode`].
@@ -78,9 +75,13 @@ where
         &self,
         event_tx: mpsc::Sender<ChainEvent>,
     ) -> Result<(), ManagedNodeError> {
-        let mut task_handle_guard = self.task_handle.lock().await;
-        if task_handle_guard.is_some() {
-            Err(SubscriptionError::AlreadyActive)?
+        let mut running = self.task_handle.lock().await;
+        if *running {
+            error!(
+                target: "managed_node",
+                "Failed to subscribe to events as it is running"
+            );
+            return Err(SubscriptionError::AlreadyActive)?;
         }
 
         let mut subscription = self.client.subscribe_events().await.inspect_err(|err| {
@@ -100,6 +101,12 @@ where
             self.resetter.clone(),
             event_tx,
         );
+
+        *running = true; // mark as running
+        drop(running); // release the lock early
+
+        let client = Arc::clone(&self.client);
+
         // Start background task to handle events
         let handle = tokio::spawn(async move {
             info!(target: "managed_node", "Subscription task started");
@@ -128,6 +135,10 @@ where
                             None => {
                                 // Subscription closed by the server
                                 warn!(target: "managed_node", "Subscription closed by server");
+
+                                // This can happen if the underlying ws-client got disconnected.
+                                // We need to set the client to None so that it can be initiated again.
+                                client.reset_ws_client().await;
                                 break;
                             }
                         }
@@ -147,9 +158,12 @@ where
             info!(target: "managed_node", "Subscription task finished");
         });
 
-        *task_handle_guard = Some(handle);
+        let _ = handle.await;
 
-        info!(target: "managed_node", "Subscription started successfully");
+        // Task done
+        let mut running = self.task_handle.lock().await;
+        *running = false;
+
         Ok(())
     }
 }

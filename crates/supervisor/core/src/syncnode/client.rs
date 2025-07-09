@@ -78,6 +78,9 @@ pub trait ManagedNodeClient: Debug {
         source_block_id: BlockNumHash,
         derived_block_id: BlockNumHash,
     ) -> Result<(), ManagedNodeError>;
+
+    /// Resets the ws-client to None when server disconnects
+    async fn reset_ws_client(&self);
 }
 
 /// [`ClientConfig`] sets the configuration for the managed node client.
@@ -182,6 +185,12 @@ impl Client {
 
 #[async_trait]
 impl ManagedNodeClient for Client {
+    async fn reset_ws_client(&self) {
+        let mut ws_client_guard = self.ws_client.lock().await;
+        if ws_client_guard.is_some() {
+            *ws_client_guard = None;
+        };
+    }
     async fn chain_id(&self) -> Result<ChainId, ManagedNodeError> {
         if let Some(chain_id) = self.chain_id.get() {
             return Ok(*chain_id);
