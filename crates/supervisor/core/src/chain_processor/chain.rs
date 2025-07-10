@@ -164,7 +164,7 @@ mod tests {
     #[async_trait]
     impl NodeSubscriber for MockNode {
         async fn start_subscription(
-            self: Arc<Self>,
+            &self,
             _tx: mpsc::Sender<ChainEvent>,
         ) -> Result<(), ManagedNodeError> {
             self.subscribed.store(true, Ordering::SeqCst);

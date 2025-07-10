@@ -8,7 +8,7 @@ use tracing::{error, info, warn};
 /// - `operation`: The async task to retry (must return `Result<(), E>`)
 /// - `cancel_token`: Cancels the retry loop
 /// - `max_retries`: Max retries before exiting (use `usize::MAX` for infinite)
-pub fn spawn_task_with_retry<Fut, E>(
+pub(super) fn spawn_task_with_retry<Fut, E>(
     operation: impl Fn() -> Fut + Send + Sync + 'static,
     cancel_token: CancellationToken,
     max_retries: usize,

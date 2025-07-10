@@ -7,19 +7,18 @@ use alloy_rpc_types_eth::BlockNumHash;
 use async_trait::async_trait;
 use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, LogStorageReader};
-use kona_supervisor_types::{OutputV0, Receipts, spawn_task_with_retry};
+use kona_supervisor_types::{OutputV0, Receipts};
 use std::sync::Arc;
 use tokio::{
     sync::{Mutex, mpsc},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
 
 use super::{
     BlockProvider, ManagedNodeClient, ManagedNodeController, ManagedNodeDataProvider,
     ManagedNodeError, NodeSubscriber, SubscriptionError, resetter::Resetter,
-    task::ManagedEventTask,
+    task::ManagedEventTask, utils::spawn_task_with_retry,
 };
 use crate::event::ChainEvent;
 
@@ -61,7 +60,8 @@ where
     /// If the chain ID is already cached, it returns that.
     /// If not, it fetches the chain ID from the managed node.
     pub async fn chain_id(&self) -> Result<ChainId, ManagedNodeError> {
-        self.client.chain_id().await
+        let chain_id = self.client.chain_id().await?;
+        Ok(chain_id)
     }
 }
 
@@ -76,87 +76,30 @@ where
     /// Establishes a WebSocket connection and subscribes to node events.
     /// Spawns a background task to process incoming events.
     async fn start_subscription(
-        self: Arc<Self>,
+        &self,
         event_tx: mpsc::Sender<ChainEvent>,
     ) -> Result<(), ManagedNodeError> {
-        let chain_id = self.chain_id().await?;
         let mut task_handle_guard = self.task_handle.lock().await;
         if task_handle_guard.is_some() {
             Err(SubscriptionError::AlreadyActive)?
         }
 
-        let task = Arc::new(ManagedEventTask::new(
-            self.client.clone(),
-            self.l1_provider.clone(),
-            self.resetter.clone(),
-            event_tx.clone(),
-        ));
-
-        let node = self.clone();
+        let client = self.client.clone();
+        let l1_provider = self.l1_provider.clone();
+        let resetter = self.resetter.clone();
+        let cancel_token = self.cancel_token.clone();
 
         // spawn a task which will be retried in failures
         let handle = spawn_task_with_retry(
             move || {
-                let node = node.clone();
-                let task = task.clone();
-                async move {
-                    let mut subscription =
-                        node.client.subscribe_events().await.inspect_err(|err| {
-                            error!(
-                                target: "managed_node",
-                                %chain_id,
-                                %err,
-                                "Failed to subscribe to events"
-                            );
-                        })?;
-
-                    let handle = tokio::spawn(async move {
-                        info!(target: "managed_node", %chain_id, "Subscription task started");
-                        loop {
-                            tokio::select! {
-                                _ = node.cancel_token.cancelled() => {
-                                    info!(target: "managed_node", %chain_id, "Cancellation token triggered, shutting down subscription");
-                                    break;
-                                }
-                                incoming_event = subscription.next() => {
-                                    match incoming_event {
-                                        Some(Ok(subscription_event)) => {
-                                            task.handle_managed_event(subscription_event.data).await;
-                                        }
-                                        Some(Err(err)) => {
-                                            error!(
-                                                target: "managed_node",
-                                                %chain_id,
-                                                %err,
-                                                "Error in event deserialization"
-                                            );
-                                        }
-                                        None => {
-                                            warn!(target: "managed_node",%chain_id, "Subscription closed by server");
-                                            node.client.reset_ws_client().await;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if let Err(err) = subscription.unsubscribe().await {
-                            warn!(
-                                target: "managed_node",
-                                %chain_id,
-                                %err,
-                                "Failed to unsubscribe gracefully"
-                            );
-                        }
-
-                        info!(target: "managed_node", %chain_id, "Subscription task finished");
-                    });
-
-                    let _ = handle.await;
-
-                    Ok::<_, ManagedNodeError>(())
-                }
+                let task = ManagedEventTask::new(
+                    client.clone(),
+                    l1_provider.clone(),
+                    resetter.clone(),
+                    cancel_token.clone(),
+                    event_tx.clone(),
+                );
+                async move { task.run().await }
             },
             self.cancel_token.clone(),
             usize::MAX,
@@ -177,10 +120,12 @@ where
     C: ManagedNodeClient + Send + Sync + 'static,
 {
     async fn block_by_number(&self, number: u64) -> Result<BlockInfo, ManagedNodeError> {
-        self.client.block_ref_by_number(number).await
+        let block = self.client.block_ref_by_number(number).await?;
+        Ok(block)
     }
     async fn fetch_receipts(&self, block_hash: B256) -> Result<Receipts, ManagedNodeError> {
-        self.client.fetch_receipts(block_hash).await
+        let receipt = self.client.fetch_receipts(block_hash).await?;
+        Ok(receipt)
     }
 }
 
@@ -191,21 +136,24 @@ where
     C: ManagedNodeClient + Send + Sync + 'static,
 {
     async fn output_v0_at_timestamp(&self, timestamp: u64) -> Result<OutputV0, ManagedNodeError> {
-        self.client.output_v0_at_timestamp(timestamp).await
+        let outputv0 = self.client.output_v0_at_timestamp(timestamp).await?;
+        Ok(outputv0)
     }
 
     async fn pending_output_v0_at_timestamp(
         &self,
         timestamp: u64,
     ) -> Result<OutputV0, ManagedNodeError> {
-        self.client.pending_output_v0_at_timestamp(timestamp).await
+        let outputv0 = self.client.pending_output_v0_at_timestamp(timestamp).await?;
+        Ok(outputv0)
     }
 
     async fn l2_block_ref_by_timestamp(
         &self,
         timestamp: u64,
     ) -> Result<BlockInfo, ManagedNodeError> {
-        self.client.l2_block_ref_by_timestamp(timestamp).await
+        let block = self.client.l2_block_ref_by_timestamp(timestamp).await?;
+        Ok(block)
     }
 }
 
@@ -219,14 +167,16 @@ where
         &self,
         finalized_block_id: BlockNumHash,
     ) -> Result<(), ManagedNodeError> {
-        self.client.update_finalized(finalized_block_id).await
+        self.client.update_finalized(finalized_block_id).await?;
+        Ok(())
     }
 
     async fn update_cross_unsafe(
         &self,
         cross_unsafe_block_id: BlockNumHash,
     ) -> Result<(), ManagedNodeError> {
-        self.client.update_cross_unsafe(cross_unsafe_block_id).await
+        self.client.update_cross_unsafe(cross_unsafe_block_id).await?;
+        Ok(())
     }
 
     async fn update_cross_safe(
@@ -234,10 +184,12 @@ where
         source_block_id: BlockNumHash,
         derived_block_id: BlockNumHash,
     ) -> Result<(), ManagedNodeError> {
-        self.client.update_cross_safe(source_block_id, derived_block_id).await
+        self.client.update_cross_safe(source_block_id, derived_block_id).await?;
+        Ok(())
     }
 
     async fn reset(&self) -> Result<(), ManagedNodeError> {
-        self.resetter.reset().await
+        self.resetter.reset().await?;
+        Ok(())
     }
 }

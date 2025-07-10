@@ -20,8 +20,6 @@ pub use access_list::{Access, AccessListError, parse_access_list};
 
 mod chain_id;
 mod types;
-mod utils;
-pub use utils::spawn_task_with_retry;
 
 pub use chain_id::HexChainId;
 
