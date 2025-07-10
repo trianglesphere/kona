@@ -308,7 +308,7 @@ in <a href="https://github.com/op-rs/kona/blob/main/crates/protocol/src/info/mod
 <pre><code class="language-rust ignore">    pub fn encode_calldata(&amp;self) -&gt; Bytes { ... }
 
     pub fn decode_calldata(r: &amp;[u8]) -&gt; Result&lt;Self, DecodeError&gt; { ... }</code></pre>
-<p>Use other hardfork variants like the <a href="https://github.com/op-rs/kona/blob/main/crates/protocol/src/info/ecotone.rs"><code>L1BlockInfoEcotone</code></a>
+<p>Use other hardfork variants like the <a href="https://github.com/op-rs/kona/blob/main/crates/protocol/protocol/src/info/ecotone.rs"><code>L1BlockInfoEcotone</code></a>
 for reference.</p>
 <p>Next, add the new "Glacier" variant to the <a href="https://docs.rs/kona-protocol/latest/kona_protocol/enum.L1BlockInfoTx.html"><code>L1BlockInfoTx</code></a>.</p>
 <pre><code class="language-rust ignore">pub enum L1BlockInfoTx {
