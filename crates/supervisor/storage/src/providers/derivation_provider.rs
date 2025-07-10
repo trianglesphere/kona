@@ -315,6 +315,8 @@ where
             return Err(StorageError::BlockOutOfOrder);
         }
 
+        // 1 -> 3 DerivedBlockOutOfOrder
+        // 1 -> 2 parentHashMistmtch ConflictError
         if !latest_derivation_state.derived.is_parent_of(&incoming_pair.derived) {
             warn!(
               target: "supervisor_storage",
