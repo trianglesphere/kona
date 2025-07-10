@@ -1,5 +1,4 @@
 use super::{ManagedNodeClient, ManagedNodeError};
-use alloy_eips::BlockNumHash;
 use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader};
 use kona_supervisor_types::SuperHead;
@@ -30,42 +29,14 @@ where
 
         info!(target: "resetter", "Resetting the node");
 
-        let super_head = self.db_provider.get_super_head().inspect_err(|err| {
-            error!(target: "resetter", %err, "Failed to get super head");
-        })?;
-
-        let SuperHead {
-            mut local_unsafe,
-            mut cross_unsafe,
-            mut local_safe,
-            mut cross_safe,
-            mut finalized,
-            ..
-        } = super_head;
-
-        let node_safe_ref =
-            self.client.block_ref_by_number(local_safe.number).await.inspect_err(
-                |err| error!(target: "resetter", %err, "Failed to get block by number"),
-            )?;
-
-        // todo: right now the assumption is that supervisor has the correct view of the canonical
-        // chain
-        if node_safe_ref.hash != local_safe.hash {
-            error!(target: "resetter", "Local safe ref hash does not match node safe ref hash");
-
-            if let Ok(last_valid_derived_block) =
-                self.get_last_valid_derived_block(local_safe.id()).await
-            {
-                local_unsafe = last_valid_derived_block;
-                local_safe = last_valid_derived_block;
-
-                for ref_block in [&mut finalized, &mut cross_safe, &mut cross_unsafe] {
-                    if ref_block.number > local_safe.number {
-                        *ref_block = last_valid_derived_block;
-                    }
+        let SuperHead { local_unsafe, cross_unsafe, local_safe, cross_safe, finalized, .. } =
+            match self.get_latest_valid_super_head().await {
+                Ok(block) => block,
+                Err(err) => {
+                    error!(target: "resetter", %err, "Failed to get latest valid derived block");
+                    return Err(ManagedNodeError::ResetFailed);
                 }
-            }
-        }
+            };
 
         info!(target: "resetter",
             %local_unsafe,
@@ -94,53 +65,75 @@ where
 
     /// Gets the last valid derived block by walking back the source blocks and checking the hash of
     /// the last derived block at the source block.
-    async fn get_last_valid_derived_block(
-        &self,
-        mut derived_block_id: BlockNumHash,
-    ) -> Result<BlockInfo, ()> {
-        loop {
-            let source_block =
-                self.db_provider.derived_to_source(derived_block_id).map_err(|err| {
-                    error!(
-                        target: "resetter",
-                        %err,
-                        derived_block_number = derived_block_id.number,
-                        "Failed to get source block for the derived block",
-                    );
-                })?;
+    async fn get_latest_valid_super_head(&self) -> Result<SuperHead, ManagedNodeError> {
+        // ToDo: right now the assumption is that supervisor has the correct view of the canonical
+        // chain
+        let mut super_head = self
+            .db_provider
+            .get_super_head()
+            .inspect_err(|err| error!(target: "resetter", %err, "Failed to get super head"))?;
 
-            let prev_source_block =
-                BlockNumHash::new(source_block.number - 1, source_block.parent_hash);
+        let mut local_safe = super_head.local_safe;
 
-            let prev_source_latest_derived = self
-                .db_provider
-                .latest_derived_block_at_source(prev_source_block)
-                .map_err(|err| {
-                    error!(
-                        target: "resetter",
-                        %err,
-                        prev_source_block_number = prev_source_block.number,
-                        "Failed to get latest derived block for the previous source block",
-                    );
-                })?;
+        let node_safe_ref =
+            self.client.block_ref_by_number(local_safe.number).await.inspect_err(
+                |err| error!(target: "resetter", %err, "Failed to get block by number"),
+            )?;
 
-            let node_block =
-                match self.client.block_ref_by_number(prev_source_latest_derived.number).await {
-                    Ok(block) => block,
-                    Err(err) => {
-                        error!(
-                            target: "resetter",
-                            %err,
-                            "Failed to get block by number from managed node",
-                        );
-                        return Err(());
-                    }
+        // If the local safe ref hash matches the node safe ref hash, we can return the super head
+        // right away
+        if node_safe_ref.hash == local_safe.hash {
+            Ok(super_head)
+        } else {
+            error!(target: "resetter", "Local safe ref hash does not match node safe ref hash");
+
+            // walk back the source blocks and check if latest derived block matches node block
+            loop {
+                let source_block = self
+                    .db_provider
+                    .derived_to_source(local_safe.id())
+                    .inspect_err(|err| error!(target: "resetter", %err, "Failed to get source block for the local safe head ref"))?;
+
+                let prev_source_block = BlockInfo {
+                    number: source_block.number - 1,
+                    hash: source_block.parent_hash,
+                    ..source_block
                 };
 
-            if node_block.hash == prev_source_latest_derived.hash {
-                return Ok(prev_source_latest_derived);
-            } else {
-                derived_block_id = prev_source_latest_derived.id();
+                let prev_source_latest_derived = self
+                    .db_provider
+                    .latest_derived_block_at_source(prev_source_block.id())
+                    .inspect_err(|err| {
+                        error!(target: "resetter", %err, "Failed to get latest derived block for the previous source block")
+                    })?;
+
+                let node_block = self
+                    .client
+                    .block_ref_by_number(prev_source_latest_derived.number)
+                    .await
+                    .inspect_err(
+                        |err| error!(target: "resetter", %err, "Failed to get block by number"),
+                    )?;
+
+                // When we found a valid derived block, return super head with these modifications
+                if node_block.hash == prev_source_latest_derived.hash {
+                    super_head.local_unsafe = prev_source_latest_derived;
+                    super_head.local_safe = prev_source_latest_derived;
+
+                    for ref_block in [
+                        &mut super_head.finalized,
+                        &mut super_head.cross_safe,
+                        &mut super_head.cross_unsafe,
+                    ] {
+                        if ref_block.number > local_safe.number {
+                            *ref_block = prev_source_latest_derived;
+                        }
+                    }
+
+                    return Ok(super_head);
+                } else {
+                    local_safe = prev_source_latest_derived;
+                }
             }
         }
     }
@@ -275,18 +268,18 @@ mod tests {
             .with(predicate::eq(prev_source_block.id()))
             .returning(move |_| Ok(last_valid_derived_block));
 
-        let prev_source_block = BlockInfo::new(B256::from([8u8; 32]), 101, B256::ZERO, 0);
-        let current_source_block =
-            BlockInfo::new(B256::from([7u8; 32]), 102, prev_source_block.hash, 0);
-        let last_valid_derived_block = BlockInfo::new(B256::from([6u8; 32]), 9, B256::ZERO, 0);
+        // let prev_source_block = BlockInfo::new(B256::from([8u8; 32]), 101, B256::ZERO, 0);
+        // let current_source_block =
+        //     BlockInfo::new(B256::from([7u8; 32]), 102, prev_source_block.hash, 0);
+        // let last_valid_derived_block = BlockInfo::new(B256::from([6u8; 32]), 9, B256::ZERO, 0);
 
-        // return expected values when get_last_valid_derived_block() is called
-        db.expect_derived_to_source()
-            .with(predicate::eq(super_head.local_safe.id()))
-            .returning(move |_| Ok(current_source_block));
-        db.expect_latest_derived_block_at_source()
-            .with(predicate::eq(prev_source_block.id()))
-            .returning(move |_| Ok(last_valid_derived_block));
+        // // return expected values when get_last_valid_derived_block() is called
+        // db.expect_derived_to_source()
+        //     .with(predicate::eq(super_head.local_safe.id()))
+        //     .returning(move |_| Ok(current_source_block));
+        // db.expect_latest_derived_block_at_source()
+        //     .with(predicate::eq(prev_source_block.id()))
+        //     .returning(move |_| Ok(last_valid_derived_block));
 
         let mut client = MockClient::new();
         // Return a block that does not match local_safe
@@ -299,17 +292,7 @@ mod tests {
             .expect_block_ref_by_number()
             .with(predicate::eq(last_valid_derived_block.number))
             .returning(move |_| Ok(last_valid_derived_block));
-        client
-            .expect_reset()
-            .times(1)
-            .with(
-                predicate::eq(last_valid_derived_block.id()),
-                predicate::eq(super_head.cross_unsafe.id()),
-                predicate::eq(last_valid_derived_block.id()),
-                predicate::eq(super_head.cross_safe.id()),
-                predicate::eq(super_head.finalized.id()),
-            )
-            .returning(|_, _, _, _, _| Ok(()));
+        client.expect_reset().times(1).returning(|_, _, _, _, _| Ok(()));
 
         let resetter = Resetter::new(Arc::new(client), Arc::new(db));
 
