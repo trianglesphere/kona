@@ -16,8 +16,8 @@ use thiserror::Error;
 /// This is used to determine how to handle the error when draining the engine task queue.
 #[derive(Debug, PartialEq, Eq)]
 pub enum EngineTaskErrorSeverity {
-    /// The error is temporary and the task is retried.
-    Temporary,
+    /// The task should be dropped.
+    Drop,
     /// The error is critical and is propagated to the engine actor.
     Critical,
     /// The error indicates that the engine should be reset.
@@ -45,7 +45,7 @@ pub trait EngineTaskExt {
     type Error: EngineTaskError;
 
     /// Executes the task, taking a shared lock on the engine state and `self`.
-    async fn execute(&self, state: &mut EngineState) -> Result<Self::Output, Self::Error>;
+    async fn execute(self, state: &mut EngineState) -> Result<Self::Output, Self::Error>;
 }
 
 /// An error that may occur during an [`EngineTask`]'s execution.
@@ -83,7 +83,7 @@ impl EngineTaskError for EngineTaskErrors {
 /// Tasks that may be inserted into and executed by the [`Engine`].
 ///
 /// [`Engine`]: crate::Engine
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum EngineTask {
     /// Perform a `engine_forkchoiceUpdated` call with the current [`EngineState`]'s forkchoice,
     /// and no payload attributes.
@@ -97,21 +97,6 @@ pub enum EngineTask {
     Consolidate(ConsolidateTask),
     /// Finalizes an L2 block
     Finalize(FinalizeTask),
-}
-
-impl EngineTask {
-    /// Executes the task without consuming it.
-    async fn execute_inner(&self, state: &mut EngineState) -> Result<(), EngineTaskErrors> {
-        match self.clone() {
-            Self::ForkchoiceUpdate(task) => task.execute(state).await.map(|_| ())?,
-            Self::Insert(task) => task.execute(state).await?,
-            Self::Build(task) => task.execute(state).await?,
-            Self::Consolidate(task) => task.execute(state).await?,
-            Self::Finalize(task) => task.execute(state).await?,
-        };
-
-        Ok(())
-    }
 }
 
 impl PartialEq for EngineTask {
@@ -181,27 +166,13 @@ impl EngineTaskExt for EngineTask {
 
     type Error = EngineTaskErrors;
 
-    async fn execute(&self, state: &mut EngineState) -> Result<(), Self::Error> {
-        // Retry the task until it succeeds or a critical error occurs.
-        while let Err(e) = self.execute_inner(state).await {
-            match e.severity() {
-                EngineTaskErrorSeverity::Temporary => {
-                    trace!(target: "engine", "{e}");
-                    continue;
-                }
-                EngineTaskErrorSeverity::Critical => {
-                    error!(target: "engine", "{e}");
-                    return Err(e);
-                }
-                EngineTaskErrorSeverity::Reset => {
-                    warn!(target: "engine", "Engine requested derivation reset");
-                    return Err(e);
-                }
-                EngineTaskErrorSeverity::Flush => {
-                    warn!(target: "engine", "Engine requested derivation flush");
-                    return Err(e);
-                }
-            }
+    async fn execute(self, state: &mut EngineState) -> Result<(), Self::Error> {
+        match self {
+            Self::ForkchoiceUpdate(task) => task.execute(state).await.map(|_| ())?,
+            Self::Insert(task) => task.execute(state).await?,
+            Self::Build(task) => task.execute(state).await?,
+            Self::Consolidate(task) => task.execute(state).await?,
+            Self::Finalize(task) => task.execute(state).await?,
         }
 
         Ok(())

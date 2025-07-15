@@ -35,7 +35,7 @@ impl EngineTaskError for FinalizeTaskError {
             Self::BlockNotSafe => EngineTaskErrorSeverity::Critical,
             Self::BlockNotFound(_) => EngineTaskErrorSeverity::Critical,
             Self::FromBlock(_) => EngineTaskErrorSeverity::Critical,
-            Self::TransportError(_) => EngineTaskErrorSeverity::Temporary,
+            Self::TransportError(_) => EngineTaskErrorSeverity::Drop,
             Self::ForkchoiceUpdateFailed(inner) => inner.severity(),
         }
     }

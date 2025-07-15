@@ -34,9 +34,9 @@ pub enum ForkchoiceTaskError {
 impl EngineTaskError for ForkchoiceTaskError {
     fn severity(&self) -> EngineTaskErrorSeverity {
         match self {
-            Self::NoForkchoiceUpdateNeeded => EngineTaskErrorSeverity::Temporary,
-            Self::EngineSyncing => EngineTaskErrorSeverity::Temporary,
-            Self::ForkchoiceUpdateFailed(_) => EngineTaskErrorSeverity::Temporary,
+            Self::NoForkchoiceUpdateNeeded => EngineTaskErrorSeverity::Drop,
+            Self::EngineSyncing => EngineTaskErrorSeverity::Drop,
+            Self::ForkchoiceUpdateFailed(_) => EngineTaskErrorSeverity::Drop,
             Self::FinalizedAheadOfUnsafe(_, _) => EngineTaskErrorSeverity::Critical,
             Self::UnexpectedPayloadStatus(_) => EngineTaskErrorSeverity::Critical,
             Self::InvalidForkchoiceState => EngineTaskErrorSeverity::Reset,

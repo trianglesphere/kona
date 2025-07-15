@@ -268,42 +268,39 @@ impl EngineActorState {
         engine_l2_safe_head_tx: &watch::Sender<L2BlockInfo>,
         finalizer: &mut L2Finalizer,
     ) -> Result<(), EngineError> {
-        match self.engine.drain().await {
-            Ok(_) => {
-                trace!(target: "engine", "[ENGINE] tasks drained");
-            }
-            Err(err) => {
-                match err.severity() {
-                    EngineTaskErrorSeverity::Critical => {
-                        error!(target: "engine", ?err, "Critical error draining engine tasks");
-                        return Err(err.into());
-                    }
-                    EngineTaskErrorSeverity::Reset => {
-                        warn!(target: "engine", ?err, "Received reset request");
-                        self.reset(derivation_signal_tx, engine_l2_safe_head_tx, finalizer).await?;
-                    }
-                    EngineTaskErrorSeverity::Flush => {
-                        // This error is encountered when the payload is marked INVALID
-                        // by the engine api. Post-holocene, the payload is replaced by
-                        // a "deposits-only" block and re-executed. At the same time,
-                        // the channel and any remaining buffered batches are flushed.
-                        warn!(target: "engine", ?err, "Invalid payload, Flushing derivation pipeline.");
-                        match derivation_signal_tx.send(Signal::FlushChannel).await {
-                            Ok(_) => {
-                                debug!(target: "engine", "Sent flush signal to derivation actor")
-                            }
-                            Err(err) => {
-                                error!(target: "engine", ?err, "Failed to send flush signal to the derivation actor.");
-                                return Err(EngineError::ChannelClosed);
-                            }
+        while let Err(err) = self.engine.drain().await {
+            match err.severity() {
+                EngineTaskErrorSeverity::Critical => {
+                    error!(target: "engine", ?err, "Critical error draining engine tasks");
+                    return Err(err.into());
+                }
+                EngineTaskErrorSeverity::Reset => {
+                    warn!(target: "engine", ?err, "Received reset request");
+                    self.reset(derivation_signal_tx, engine_l2_safe_head_tx, finalizer).await?;
+                }
+                EngineTaskErrorSeverity::Flush => {
+                    // This error is encountered when the payload is marked INVALID
+                    // by the engine api. Post-holocene, the payload is replaced by
+                    // a "deposits-only" block and re-executed. At the same time,
+                    // the channel and any remaining buffered batches are flushed.
+                    warn!(target: "engine", ?err, "Invalid payload, Flushing derivation pipeline.");
+                    match derivation_signal_tx.send(Signal::FlushChannel).await {
+                        Ok(_) => {
+                            debug!(target: "engine", "Sent flush signal to derivation actor")
+                        }
+                        Err(err) => {
+                            error!(target: "engine", ?err, "Failed to send flush signal to the derivation actor.");
+                            return Err(EngineError::ChannelClosed);
                         }
                     }
-                    EngineTaskErrorSeverity::Temporary => {
-                        trace!(target: "engine", ?err, "Temporary error draining engine tasks");
-                    }
+                }
+                EngineTaskErrorSeverity::Drop => {
+                    debug!(target: "engine", ?err, "Temporary error occurred while draining engine tasks. Continuing...");
                 }
             }
         }
+
+        trace!(target: "engine", "Engine tasks drained successfully");
 
         self.maybe_update_safe_head(engine_l2_safe_head_tx);
         self.check_el_sync(

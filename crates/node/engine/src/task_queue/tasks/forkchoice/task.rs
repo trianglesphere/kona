@@ -15,7 +15,7 @@ use tokio::time::Instant;
 
 /// The [`ForkchoiceTask`] executes an `engine_forkchoiceUpdated` call with the current
 /// [`EngineState`]'s forkchoice, and no payload attributes.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ForkchoiceTask {
     /// The engine client.
     pub client: Arc<EngineClient>,
@@ -81,7 +81,7 @@ impl EngineTaskExt for ForkchoiceTask {
     type Output = Option<PayloadId>;
     type Error = ForkchoiceTaskError;
 
-    async fn execute(&self, state: &mut EngineState) -> Result<Self::Output, ForkchoiceTaskError> {
+    async fn execute(self, state: &mut EngineState) -> Result<Self::Output, ForkchoiceTaskError> {
         // Apply the sync state update to the engine state.
         let new_sync_state = state.sync_state.apply_update(self.state_update);
 
@@ -118,8 +118,7 @@ impl EngineTaskExt for ForkchoiceTask {
             self.envelope.as_ref().map(|p| p.inner.payload_attributes.timestamp).unwrap_or(0),
         );
 
-        // TODO(@theochap, `<https://github.com/op-rs/kona/issues/2387>`): we should avoid cloning the payload attributes here.
-        let payload_attributes = self.envelope.as_ref().map(|p| p.inner()).cloned();
+        let payload_attributes = self.envelope.map(|p| p.inner);
 
         // Send the forkchoice update through the input.
         let forkchoice = new_sync_state.create_forkchoice_state();

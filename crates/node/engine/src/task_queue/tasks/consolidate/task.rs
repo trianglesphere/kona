@@ -13,7 +13,7 @@ use std::{sync::Arc, time::Instant};
 /// using the specified payload attributes and the oldest unsafe head.
 ///
 /// If consolidation fails, payload attributes processing is attempted using the [`BuildTask`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConsolidateTask {
     /// The engine client.
     pub client: Arc<EngineClient>,
@@ -38,14 +38,11 @@ impl ConsolidateTask {
 
     /// Executes a new [`BuildTask`].
     /// This is used when the [`ConsolidateTask`] fails to consolidate the engine state.
-    async fn execute_build_task(
-        &self,
-        state: &mut EngineState,
-    ) -> Result<(), ConsolidateTaskError> {
+    async fn execute_build_task(self, state: &mut EngineState) -> Result<(), ConsolidateTaskError> {
         let build_task = BuildTask::new(
-            self.client.clone(),
-            self.cfg.clone(),
-            self.attributes.clone(),
+            self.client,
+            self.cfg,
+            self.attributes,
             self.is_attributes_derived,
             None,
         );
@@ -53,7 +50,7 @@ impl ConsolidateTask {
     }
 
     /// Attempts consolidation on the engine state.
-    pub async fn consolidate(&self, state: &mut EngineState) -> Result<(), ConsolidateTaskError> {
+    pub async fn consolidate(self, state: &mut EngineState) -> Result<(), ConsolidateTaskError> {
         let global_start = Instant::now();
 
         // Fetch the unsafe l2 block after the attributes parent.
@@ -104,8 +101,8 @@ impl ConsolidateTask {
                     let fcu_start = Instant::now();
 
                     ForkchoiceTask::new(
-                        Arc::clone(&self.client),
-                        self.cfg.clone(),
+                        self.client,
+                        self.cfg,
                         EngineSyncStateUpdate {
                             safe_head: Some(block_info),
                             local_safe_head: Some(block_info),
@@ -167,7 +164,7 @@ impl EngineTaskExt for ConsolidateTask {
 
     type Error = ConsolidateTaskError;
 
-    async fn execute(&self, state: &mut EngineState) -> Result<(), ConsolidateTaskError> {
+    async fn execute(self, state: &mut EngineState) -> Result<(), ConsolidateTaskError> {
         // Skip to building the payload attributes if consolidation is not needed.
         if state.sync_state.safe_head().block_info.number <
             state.sync_state.unsafe_head().block_info.number

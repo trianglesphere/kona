@@ -1,8 +1,8 @@
 //! A task for building a new block and importing it.
 use super::BuildTaskError;
 use crate::{
-    EngineClient, EngineGetPayloadVersion, EngineState, EngineTaskExt, ForkchoiceTask,
-    ForkchoiceTaskError, InsertTask,
+    EngineClient, EngineGetPayloadVersion, EngineState, EngineTaskError, EngineTaskErrorSeverity,
+    EngineTaskExt, ForkchoiceTask, ForkchoiceTaskError, InsertTask,
     InsertTaskError::{self},
     Metrics,
     state::EngineSyncStateUpdate,
@@ -10,7 +10,7 @@ use crate::{
 use alloy_rpc_types_engine::{ExecutionPayload, PayloadId};
 use async_trait::async_trait;
 use kona_genesis::RollupConfig;
-use kona_protocol::{L2BlockInfo, OpAttributesWithParent};
+use kona_protocol::OpAttributesWithParent;
 use op_alloy_provider::ext::engine::OpEngineApi;
 use op_alloy_rpc_types_engine::{OpExecutionPayload, OpExecutionPayloadEnvelope};
 use std::{sync::Arc, time::Instant};
@@ -54,14 +54,11 @@ impl BuildTask {
     /// - `engine_getPayloadV3` is used for payloads with a timestamp after the Ecotone fork.
     /// - `engine_getPayloadV4` is used for payloads with a timestamp after the Isthmus fork.
     async fn fetch_payload(
-        &self,
         cfg: &RollupConfig,
         engine: &EngineClient,
         payload_id: PayloadId,
-        payload_attrs: OpAttributesWithParent,
+        payload_timestamp: u64,
     ) -> Result<OpExecutionPayloadEnvelope, BuildTaskError> {
-        let payload_timestamp = payload_attrs.inner().payload_attributes.timestamp;
-
         debug!(
             target: "engine_builder",
             payload_id = payload_id.to_string(),
@@ -112,6 +109,46 @@ impl BuildTask {
 
         Ok(payload_envelope)
     }
+
+    /// Treis to insert the payload into the engine.
+    ///
+    /// ## Error Handling
+    /// If the forkchoice update fails, it will be retried up to 3 times.
+    /// If the forkchoice update fails with a critical error, it will be returned immediately.
+    /// If the forkchoice update fails with a non-critical error, it will be retried.
+    /// If the forkchoice update succeeds, the payload id will be returned.
+    async fn insert_payload(&self, state: &mut EngineState) -> Result<PayloadId, BuildTaskError> {
+        const MAX_INSERT_ATTEMPTS: usize = 3;
+
+        let mut insert_payload = None;
+
+        for i in 0..MAX_INSERT_ATTEMPTS {
+            match ForkchoiceTask::new(
+                self.engine.clone(),
+                self.cfg.clone(),
+                EngineSyncStateUpdate {
+                    unsafe_head: Some(self.attributes.parent),
+                    ..Default::default()
+                },
+                Some(self.attributes.clone()),
+            )
+            .execute(state)
+            .await
+            {
+                // Critical errors should be returned immediately.
+                Err(e) if e.severity() != EngineTaskErrorSeverity::Drop => return Err(e.into()),
+                Err(e) => {
+                    debug!(target: "engine_builder", error = ?e, attempt = i, "Forkchoice update failed, retrying...");
+                }
+                Ok(payload_id) => {
+                    insert_payload = payload_id;
+                    break;
+                }
+            }
+        }
+
+        insert_payload.ok_or(BuildTaskError::InsertPayloadFailed)
+    }
 }
 
 #[async_trait]
@@ -120,7 +157,7 @@ impl EngineTaskExt for BuildTask {
 
     type Error = BuildTaskError;
 
-    async fn execute(&self, state: &mut EngineState) -> Result<(), BuildTaskError> {
+    async fn execute(self, state: &mut EngineState) -> Result<(), BuildTaskError> {
         debug!(
             target: "engine_builder",
             txs = self.attributes.inner().transactions.as_ref().map_or(0, |txs| txs.len()),
@@ -130,32 +167,17 @@ impl EngineTaskExt for BuildTask {
         // Start the build by sending an FCU call with the current forkchoice and the input
         // payload attributes.
         let fcu_start_time = Instant::now();
-        let payload_id = ForkchoiceTask::new(
-            self.engine.clone(),
-            self.cfg.clone(),
-            EngineSyncStateUpdate {
-                unsafe_head: Some(self.attributes.parent),
-                ..Default::default()
-            },
-            Some(self.attributes.clone()),
-        )
-        .execute(state)
-        .await?
-        .ok_or(BuildTaskError::MissingPayloadId)?;
+
+        let payload_id = self.insert_payload(state).await?;
+        let payload_timestamp = self.attributes.inner().payload_attributes.timestamp;
+        let block_number = self.attributes.block_number();
+
         let fcu_duration = fcu_start_time.elapsed();
 
         // Fetch the payload just inserted from the EL and import it into the engine.
         let block_import_start_time = Instant::now();
-        let new_payload = self
-            .fetch_payload(&self.cfg, &self.engine, payload_id, self.attributes.clone())
-            .await?;
-
-        let new_block_ref = L2BlockInfo::from_payload_and_genesis(
-            new_payload.payload.clone(),
-            self.attributes.inner().payload_attributes.parent_beacon_block_root,
-            &self.cfg.genesis,
-        )
-        .map_err(BuildTaskError::FromBlock)?;
+        let new_payload =
+            Self::fetch_payload(&self.cfg, &self.engine, payload_id, payload_timestamp).await?;
 
         // Insert the new block into the engine.
         match InsertTask::new(
@@ -176,10 +198,7 @@ impl EngineTaskExt for BuildTask {
             // HOLOCENE: Re-attempt payload import with deposits only
             Err(InsertTaskError::ForkchoiceUpdateFailed(
                 ForkchoiceTaskError::InvalidPayloadStatus(e),
-            )) if self
-                .cfg
-                .is_holocene_active(self.attributes.inner().payload_attributes.timestamp) =>
-            {
+            )) if self.cfg.is_holocene_active(payload_timestamp) => {
                 warn!(target: "engine_builder", error = ?e, "Re-attempting payload import with deposits only.");
                 // HOLOCENE: Re-attempt payload import with deposits only
                 match Self::new(
@@ -217,8 +236,8 @@ impl EngineTaskExt for BuildTask {
 
         info!(
             target: "engine_builder",
-            l2_number = new_block_ref.block_info.number,
-            l2_time = new_block_ref.block_info.timestamp,
+            l2_number = block_number,
+            l2_time = payload_timestamp,
             fcu_duration = ?fcu_duration,
             block_import_duration = ?block_import_duration,
             "Built and imported new {} block",

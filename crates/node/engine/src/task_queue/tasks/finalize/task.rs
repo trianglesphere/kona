@@ -12,7 +12,7 @@ use std::{sync::Arc, time::Instant};
 
 /// The [`FinalizeTask`] fetches the [`L2BlockInfo`] at `block_number`, updates the [`EngineState`],
 /// and dispatches a forkchoice update to finalize the block.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FinalizeTask {
     /// The engine client.
     pub client: Arc<EngineClient>,
@@ -35,7 +35,7 @@ impl EngineTaskExt for FinalizeTask {
 
     type Error = FinalizeTaskError;
 
-    async fn execute(&self, state: &mut EngineState) -> Result<(), FinalizeTaskError> {
+    async fn execute(self, state: &mut EngineState) -> Result<(), FinalizeTaskError> {
         // Sanity check that the block that is being finalized is at least safe.
         if state.sync_state.safe_head().block_info.number < self.block_number {
             return Err(FinalizeTaskError::BlockNotSafe);
@@ -58,8 +58,8 @@ impl EngineTaskExt for FinalizeTask {
         // Dispatch a forkchoice update.
         let fcu_start = Instant::now();
         ForkchoiceTask::new(
-            self.client.clone(),
-            self.cfg.clone(),
+            self.client,
+            self.cfg,
             EngineSyncStateUpdate { finalized_head: Some(block_info), ..Default::default() },
             None,
         )

@@ -132,15 +132,11 @@ impl Engine {
     /// the error is returned.
     pub async fn drain(&mut self) -> Result<(), EngineTaskErrors> {
         // Drain tasks in order of priority, halting on errors for a retry to be attempted.
-        while let Some(task) = self.tasks.peek() {
-            // Execute the task
+        while let Some(task) = self.tasks.pop() {
             task.execute(&mut self.state).await?;
 
             // Update the state and notify the engine actor.
             self.state_sender.send_replace(self.state);
-
-            // Pop the task from the queue now that it's been executed.
-            self.tasks.pop();
         }
 
         Ok(())

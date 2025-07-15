@@ -5,9 +5,11 @@ use crate::{
     state::EngineSyncStateUpdate,
 };
 use alloy_eips::eip7685::EMPTY_REQUESTS_HASH;
+use alloy_primitives::FixedBytes;
 use alloy_provider::ext::EngineApi;
 use alloy_rpc_types_engine::{
-    CancunPayloadFields, ExecutionPayloadInputV2, PayloadStatusEnum, PraguePayloadFields,
+    CancunPayloadFields, ExecutionPayloadInputV2, PayloadStatus, PayloadStatusEnum,
+    PraguePayloadFields,
 };
 use async_trait::async_trait;
 use kona_genesis::RollupConfig;
@@ -20,7 +22,7 @@ use op_alloy_rpc_types_engine::{
 use std::{sync::Arc, time::Instant};
 
 /// The task to insert a payload into the execution engine.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct InsertTask {
     /// The engine client.
     client: Arc<EngineClient>,
@@ -45,8 +47,64 @@ impl InsertTask {
     }
 
     /// Checks the response of the `engine_newPayload` call.
-    const fn check_new_payload_status(&self, status: &PayloadStatusEnum) -> bool {
+    const fn check_new_payload_status(status: &PayloadStatusEnum) -> bool {
         matches!(status, PayloadStatusEnum::Valid | PayloadStatusEnum::Syncing)
+    }
+
+    fn try_into_block(
+        payload: OpExecutionPayload,
+        parent_beacon_block_root: FixedBytes<32>,
+    ) -> Result<OpBlock, InsertTaskError> {
+        match payload {
+            payload @ OpExecutionPayload::V1(_) => {
+                payload.try_into_block().map_err(InsertTaskError::FromBlockError)
+            }
+            payload @ OpExecutionPayload::V2(_) => {
+                payload.try_into_block().map_err(InsertTaskError::FromBlockError)
+            }
+            payload @ OpExecutionPayload::V3(_) => payload
+                .try_into_block_with_sidecar(&OpExecutionPayloadSidecar::v3(
+                    CancunPayloadFields::new(parent_beacon_block_root, vec![]),
+                ))
+                .map_err(InsertTaskError::FromBlockError),
+            payload @ OpExecutionPayload::V4(_) => payload
+                .try_into_block_with_sidecar(&OpExecutionPayloadSidecar::v4(
+                    CancunPayloadFields::new(parent_beacon_block_root, vec![]),
+                    PraguePayloadFields::new(EMPTY_REQUESTS_HASH),
+                ))
+                .map_err(InsertTaskError::FromBlockError),
+        }
+    }
+
+    async fn new_payload(
+        client: &EngineClient,
+        op_payload: OpExecutionPayload,
+        parent_beacon_block_root: FixedBytes<32>,
+    ) -> Result<PayloadStatus, InsertTaskError> {
+        let response = match op_payload {
+            OpExecutionPayload::V1(inner) => client.new_payload_v1(inner).await,
+            OpExecutionPayload::V2(inner) => {
+                let payload_input = ExecutionPayloadInputV2 {
+                    execution_payload: inner.payload_inner,
+                    withdrawals: Some(inner.withdrawals),
+                };
+
+                client.new_payload_v2(payload_input).await
+            }
+            OpExecutionPayload::V3(inner) => {
+                client.new_payload_v3(inner, parent_beacon_block_root).await
+            }
+            OpExecutionPayload::V4(inner) => {
+                client.new_payload_v4(inner, parent_beacon_block_root).await
+            }
+        }
+        .map_err(InsertTaskError::InsertFailed)?;
+
+        if !Self::check_new_payload_status(&response.status) {
+            return Err(InsertTaskError::UnexpectedPayloadStatus(response.status));
+        }
+
+        Ok(response)
     }
 }
 
@@ -56,77 +114,34 @@ impl EngineTaskExt for InsertTask {
 
     type Error = InsertTaskError;
 
-    async fn execute(&self, state: &mut EngineState) -> Result<(), InsertTaskError> {
+    async fn execute(self, state: &mut EngineState) -> Result<(), InsertTaskError> {
         let time_start = Instant::now();
 
         // Insert the new payload.
         // Form the new unsafe block ref from the execution payload.
         let parent_beacon_block_root = self.envelope.parent_beacon_block_root.unwrap_or_default();
         let insert_time_start = Instant::now();
-        let (response, block): (_, OpBlock) = match self.envelope.payload.clone() {
-            OpExecutionPayload::V1(payload) => (
-                self.client.new_payload_v1(payload).await,
-                self.envelope
-                    .payload
-                    .clone()
-                    .try_into_block()
-                    .map_err(InsertTaskError::FromBlockError)?,
-            ),
-            OpExecutionPayload::V2(payload) => {
-                let payload_input = ExecutionPayloadInputV2 {
-                    execution_payload: payload.payload_inner,
-                    withdrawals: Some(payload.withdrawals),
-                };
-                (
-                    self.client.new_payload_v2(payload_input).await,
-                    self.envelope
-                        .payload
-                        .clone()
-                        .try_into_block()
-                        .map_err(InsertTaskError::FromBlockError)?,
-                )
-            }
-            OpExecutionPayload::V3(payload) => (
-                self.client.new_payload_v3(payload, parent_beacon_block_root).await,
-                self.envelope
-                    .payload
-                    .clone()
-                    .try_into_block_with_sidecar(&OpExecutionPayloadSidecar::v3(
-                        CancunPayloadFields::new(parent_beacon_block_root, vec![]),
-                    ))
-                    .map_err(InsertTaskError::FromBlockError)?,
-            ),
-            OpExecutionPayload::V4(payload) => (
-                self.client.new_payload_v4(payload, parent_beacon_block_root).await,
-                self.envelope
-                    .payload
-                    .clone()
-                    .try_into_block_with_sidecar(&OpExecutionPayloadSidecar::v4(
-                        CancunPayloadFields::new(parent_beacon_block_root, vec![]),
-                        PraguePayloadFields::new(EMPTY_REQUESTS_HASH),
-                    ))
-                    .map_err(InsertTaskError::FromBlockError)?,
-            ),
-        };
 
-        // Check the `engine_newPayload` response.
-        let response = match response {
-            Ok(resp) => resp,
-            Err(e) => return Err(InsertTaskError::InsertFailed(e)),
-        };
-        if !self.check_new_payload_status(&response.status) {
-            return Err(InsertTaskError::UnexpectedPayloadStatus(response.status));
-        }
-        let insert_duration = insert_time_start.elapsed();
+        let block: OpBlock = Self::try_into_block(self.envelope.payload, parent_beacon_block_root)?;
 
         let new_unsafe_ref =
             L2BlockInfo::from_block_and_genesis(&block, &self.rollup_config.genesis)
                 .map_err(InsertTaskError::L2BlockInfoConstruction)?;
 
+        // TODO(@theochap): we should be able to optimize the `from_block_unchecked` call to remove
+        // extra clones and consume the block.
+        let (op_payload, _) =
+            OpExecutionPayload::from_block_unchecked(new_unsafe_ref.block_info.hash, &block);
+
+        let response =
+            Self::new_payload(&self.client, op_payload, parent_beacon_block_root).await?;
+
+        let insert_duration = insert_time_start.elapsed();
+
         // Send a FCU to canonicalize the imported block.
         ForkchoiceTask::new(
-            Arc::clone(&self.client),
-            self.rollup_config.clone(),
+            self.client,
+            self.rollup_config,
             EngineSyncStateUpdate {
                 cross_unsafe_head: Some(new_unsafe_ref),
                 unsafe_head: Some(new_unsafe_ref),
@@ -143,6 +158,7 @@ impl EngineTaskExt for InsertTask {
 
         info!(
             target: "engine",
+            response = ?response,
             hash = %new_unsafe_ref.block_info.hash,
             number = new_unsafe_ref.block_info.number,
             total_duration = ?total_duration,

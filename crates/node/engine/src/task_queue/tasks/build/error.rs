@@ -14,15 +14,9 @@ use tokio::sync::mpsc;
 /// An error that occurs when running the [crate::ForkchoiceTask].
 #[derive(Debug, Error)]
 pub enum BuildTaskError {
-    /// The forkchoice update is not needed.
-    #[error("No forkchoice update needed")]
-    NoForkchoiceUpdateNeeded,
-    /// The engine is syncing.
-    #[error("Attempting to update forkchoice state while EL syncing")]
-    EngineSyncing,
-    /// Missing payload ID.
-    #[error("Missing payload ID")]
-    MissingPayloadId,
+    /// Failed to insert the payload into the engine.
+    #[error("Failed to insert the payload into the engine")]
+    InsertPayloadFailed,
     /// The initial forkchoice update call to the engine api failed.
     #[error(transparent)]
     ForkchoiceUpdateFailed(#[from] ForkchoiceTaskError),
@@ -64,12 +58,10 @@ impl EngineTaskError for BuildTaskError {
         match self {
             Self::ForkchoiceUpdateFailed(inner) => inner.severity(),
             Self::PayloadInsertionFailed(inner) => inner.severity(),
-            Self::NoForkchoiceUpdateNeeded => EngineTaskErrorSeverity::Temporary,
-            Self::EngineSyncing => EngineTaskErrorSeverity::Temporary,
-            Self::GetPayloadFailed(_) => EngineTaskErrorSeverity::Temporary,
-            Self::NewPayloadFailed(_) => EngineTaskErrorSeverity::Temporary,
+            Self::GetPayloadFailed(_) => EngineTaskErrorSeverity::Reset,
+            Self::NewPayloadFailed(_) => EngineTaskErrorSeverity::Reset,
             Self::HoloceneInvalidFlush => EngineTaskErrorSeverity::Flush,
-            Self::MissingPayloadId => EngineTaskErrorSeverity::Critical,
+            Self::InsertPayloadFailed => EngineTaskErrorSeverity::Critical,
             Self::UnexpectedPayloadStatus(_) => EngineTaskErrorSeverity::Critical,
             Self::DepositOnlyPayloadReattemptFailed => EngineTaskErrorSeverity::Critical,
             Self::DepositOnlyPayloadFailed => EngineTaskErrorSeverity::Critical,

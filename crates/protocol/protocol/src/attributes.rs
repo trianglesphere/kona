@@ -70,15 +70,15 @@ impl OpAttributesWithParent {
     }
 
     /// Converts the [`OpAttributesWithParent`] into a deposits-only payload.
-    pub fn as_deposits_only(&self) -> Self {
+    pub fn as_deposits_only(self) -> Self {
         Self {
             inner: OpPayloadAttributes {
-                transactions: self.inner.transactions.as_ref().map(|txs| {
+                transactions: self.inner.transactions.map(|txs| {
                     txs.iter()
                         .map(|_| alloy_primitives::Bytes::from(vec![OpTxType::Deposit as u8]))
                         .collect()
                 }),
-                ..self.inner.clone()
+                ..self.inner
             },
             parent: self.parent,
             l1_origin: self.l1_origin,
