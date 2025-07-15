@@ -147,7 +147,8 @@ impl EngineTaskExt for InsertTask {
             number = new_unsafe_ref.block_info.number,
             total_duration = ?total_duration,
             insert_duration = ?insert_duration,
-            "Inserted new unsafe block"
+            is_safe = self.is_payload_safe,
+            "Inserted new block"
         );
 
         // Update metrics.

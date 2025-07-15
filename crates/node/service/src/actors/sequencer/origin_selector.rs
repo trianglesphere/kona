@@ -107,7 +107,11 @@ impl<P: L1OriginSelectorProvider> L1OriginSelector<P> {
             self.next = None;
         } else {
             // Find the current origin block, as it is missing.
-            let current = self.l1.get_block_by_hash(unsafe_head.l1_origin.hash).await?;
+            let current = match self.l1.get_block_by_hash(unsafe_head.l1_origin.hash).await? {
+                Some(b) => Some(b),
+                // If the current origin block is not found, use the genesis block.
+                None => self.l1.get_block_by_number(self.cfg.genesis.l1.number).await?,
+            };
 
             self.current = current;
             self.next = None;
