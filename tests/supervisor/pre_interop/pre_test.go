@@ -17,7 +17,6 @@ import (
 )
 
 func TestPreInteropNoSyncStatus(gt *testing.T) {
-	gt.Skip()
 	t := devtest.ParallelT(gt)
 	sys := presets.NewSimpleInterop(t)
 	require := t.Require()
@@ -40,7 +39,6 @@ func TestPreInteropNoSyncStatus(gt *testing.T) {
 }
 
 func TestPreInteropCheckAccessList(gt *testing.T) {
-	gt.Skip()
 	t := devtest.ParallelT(gt)
 	sys := presets.NewSimpleInterop(t)
 	require := t.Require()
