@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-devstack/dsl"
 	"github.com/ethereum-optimism/optimism/op-devstack/presets"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
+	stypes "github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
 )
 
 func TestPostInteropStatusSync(gt *testing.T) {
@@ -20,10 +21,12 @@ func TestPostInteropStatusSync(gt *testing.T) {
 		activationBlock := net.AwaitActivation(t, rollup.Interop)
 		require.NotNil(activationBlock, "ActivationBlock should return a valid block number")
 
-		// wait for some time to ensure the interop activation block is processed by the supervisor
-		t.Logger().Info("Waiting for interop activation block to be processed")
-		// todo: remove this once https://github.com/op-rs/kona/issues/2419 is fixed
-		time.Sleep(180 * time.Second)
+		t.Logger().Info("Activation block found", "blockNumber", activationBlock.Number)
+		time.Sleep(10 * time.Second)
+
+		// wait for some time to ensure the interop activation block is become cross-safe
+		t.Logger().Info("Waiting for interop activation block to be cross-safe")
+		sys.Supervisor.WaitForL2HeadToAdvanceTo(net.ChainID(), stypes.CrossSafe, activationBlock)
 
 		status, err := sys.Supervisor.Escape().QueryAPI().SyncStatus(t.Ctx())
 		require.NoError(err, "SyncStatus should not error after interop")
@@ -42,10 +45,12 @@ func TestSupervisorActivationBlock(gt *testing.T) {
 		activationBlock := net.AwaitActivation(t, rollup.Interop)
 		require.NotNil(activationBlock, "ActivationBlock should return a valid block number")
 
-		// wait for some time to ensure the interop activation block is processed by the supervisor
-		t.Logger().Info("Waiting for interop activation block to be processed")
-		// todo: remove this once https://github.com/op-rs/kona/issues/2419 is fixed
-		time.Sleep(180 * time.Second)
+		t.Logger().Info("Activation block found", "blockNumber", activationBlock.Number)
+		time.Sleep(10 * time.Second)
+
+		// wait for some time to ensure the interop activation block is become cross-safe
+		t.Logger().Info("Waiting for interop activation block to be cross-safe")
+		sys.Supervisor.WaitForL2HeadToAdvanceTo(net.ChainID(), stypes.CrossSafe, activationBlock)
 
 		interopTime := net.Escape().ChainConfig().InteropTime
 		pre := net.LatestBlockBeforeTimestamp(t, *interopTime)
