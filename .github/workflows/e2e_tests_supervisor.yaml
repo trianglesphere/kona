@@ -13,11 +13,7 @@ jobs:
       matrix:
         include:
           - devnet-config: simple-supervisor
-            test-pkg: sync
-          - devnet-config: simple-supervisor
-            test-pkg: message
-          - devnet-config: simple-supervisor
-            test-pkg: rpc
+            test-pkg: core
           - devnet-config: preinterop-supervisor
             test-pkg: pre_interop
     steps:
