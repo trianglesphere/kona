@@ -27,12 +27,11 @@ func TestPreInteropNoSyncStatus(gt *testing.T) {
 		interopTime := net.Escape().ChainConfig().InteropTime
 		t.Require().NotNil(interopTime)
 
+		require.False(net.IsActivated(*interopTime), "Test requires pre-interop state")
+		t.Logger().Info("Timestamps", "interopTime", *interopTime, "now", time.Now().Unix())
+
 		_, err := sys.Supervisor.Escape().QueryAPI().SyncStatus(t.Ctx())
 		require.ErrorContains(err, "chain database is not initialized")
-
-		// confirm we are still pre-interop
-		require.False(net.IsActivated(*interopTime))
-		t.Logger().Info("Timestamps", "interopTime", *interopTime, "now", time.Now().Unix())
 	})
 
 	t.Logger().Info("Done")
