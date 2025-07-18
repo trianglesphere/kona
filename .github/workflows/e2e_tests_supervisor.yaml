@@ -42,6 +42,10 @@ jobs:
         with:
           # Semantic version range syntax or exact version of Go
           go-version: '1.24.3'
+
+      - name: Download Go dependencies
+        run: go mod download
+        working-directory: tests
     
       - uses: jdx/mise-action@v2       # installs Mise + runs `mise install`
       
