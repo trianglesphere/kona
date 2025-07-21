@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use alloy_primitives::Address;
 use discv5::Enr;
-use kona_p2p::{ConnectionGater, Discv5Handler, GossipDriver, HandlerRequest};
+use kona_disc::{Discv5Handler, HandlerRequest};
+use kona_gossip::{ConnectionGater, GossipDriver};
 use tokio::sync::{mpsc, watch};
 
 /// A network handler used to communicate with the network once it is started.
@@ -75,7 +76,7 @@ impl NetworkHandler {
                         }
 
                         if let Some(info) = self.gossip.peerstore.remove(&peer_to_remove){
-                            use kona_p2p::ConnectionGate;
+                            use kona_gossip::ConnectionGate;
                             self.gossip.connection_gate.remove_dial(&peer_to_remove);
                             let score = self.gossip.swarm.behaviour().gossipsub.peer_score(&peer_to_remove).unwrap_or_default();
                             kona_macros::inc!(gauge, kona_p2p::Metrics::BANNED_PEERS, "peer_id" => peer_to_remove.to_string(), "score" => score.to_string());

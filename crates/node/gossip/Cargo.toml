@@ -22,7 +22,6 @@ kona-macros.workspace = true
 kona-genesis.workspace = true
 
 # Alloy
-alloy-rlp.workspace = true
 alloy-eips.workspace = true
 alloy-consensus.workspace = true
 alloy-rpc-types-engine.workspace = true
@@ -36,6 +35,7 @@ op-alloy-rpc-types-engine = { workspace = true, features = ["std", "serde"] }
 snap.workspace = true
 futures.workspace = true
 libp2p-stream.workspace = true
+discv5 = { workspace = true, features = ["libp2p"] }
 openssl = { workspace = true, features = ["vendored"] }
 libp2p-identity = { workspace = true, features = ["secp256k1"] }
 libp2p = { workspace = true, features = ["macros", "tokio", "tcp", "noise", "gossipsub", "ping", "yamux", "identify"] }
@@ -48,8 +48,6 @@ tracing.workspace = true
 thiserror.workspace = true
 serde_repr.workspace = true
 lazy_static.workspace = true
-rand = { workspace = true, features = ["thread_rng"] }
-backon = { workspace = true, features = ["std", "tokio", "tokio-sleep"] }
 derive_more = { workspace = true, features = ["display", "deref", "debug"] }
 
 # `metrics` feature

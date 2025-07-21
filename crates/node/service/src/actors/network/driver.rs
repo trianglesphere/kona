@@ -1,5 +1,6 @@
 use alloy_primitives::Address;
-use kona_p2p::{ConnectionGater, Discv5Driver, GossipDriver, PEER_SCORE_INSPECT_FREQUENCY};
+use kona_disc::Discv5Driver;
+use kona_gossip::{ConnectionGater, GossipDriver, PEER_SCORE_INSPECT_FREQUENCY};
 use libp2p::TransportError;
 use tokio::sync::watch;
 

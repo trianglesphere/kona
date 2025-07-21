@@ -11,7 +11,7 @@ use jsonrpsee::{
 };
 use kona_genesis::RollupConfig;
 use kona_interop::ExecutingDescriptor;
-use kona_p2p::{PeerCount, PeerDump, PeerInfo, PeerStats};
+use kona_gossip::{PeerCount, PeerDump, PeerInfo, PeerStats};
 use kona_protocol::SyncStatus;
 use op_alloy_consensus::interop::SafetyLevel;
 use op_alloy_rpc_types_engine::OpExecutionPayloadEnvelope;

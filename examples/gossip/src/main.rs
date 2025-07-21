@@ -21,7 +21,7 @@ use clap::{ArgAction, Parser};
 use discv5::enr::CombinedKey;
 use kona_cli::{LogFormat, init_tracing_subscriber};
 use kona_node_service::{NetworkActor, NetworkConfig, NetworkContext, NodeActor};
-use kona_p2p::LocalNode;
+use kona_disc::LocalNode;
 use kona_registry::ROLLUP_CONFIGS;
 use libp2p::{Multiaddr, identity::Keypair};
 use std::{

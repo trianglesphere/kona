@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{Discv5Handler, GossipDriver, GossipScores};
+use crate::{GossipDriver, GossipScores};
 use alloy_primitives::map::foldhash::fast::RandomState;
 use discv5::{
     enr::{NodeId, k256::ecdsa},
@@ -111,14 +111,14 @@ pub enum P2pRpcRequest {
 
 impl P2pRpcRequest {
     /// Handles the peer count request.
-    pub fn handle<G: ConnectionGate>(self, gossip: &mut GossipDriver<G>, disc: &Discv5Handler) {
+    pub fn handle<G: ConnectionGate>(self, gossip: &mut GossipDriver<G>) {
         match self {
-            Self::PeerCount(s) => Self::handle_peer_count(s, gossip, disc),
-            Self::DiscoveryTable(s) => Self::handle_discovery_table(s, disc),
-            Self::PeerInfo(s) => Self::handle_peer_info(s, gossip, disc),
-            Self::Peers { out, connected } => Self::handle_peers(out, connected, gossip, disc),
+            Self::PeerCount(s) => Self::handle_peer_count(s, gossip),
+            Self::DiscoveryTable(s) => Self::handle_discovery_table(s),
+            Self::PeerInfo(s) => Self::handle_peer_info(s, gossip),
+            Self::Peers { out, connected } => Self::handle_peers(out, connected, gossip),
             Self::DisconnectPeer { peer_id } => Self::disconnect_peer(peer_id, gossip),
-            Self::PeerStats(s) => Self::handle_peer_stats(s, gossip, disc),
+            Self::PeerStats(s) => Self::handle_peer_stats(s, gossip),
             Self::ConnectPeer { address } => Self::connect_peer(address, gossip),
             Self::BlockPeer { id } => Self::block_peer(id, gossip),
             Self::UnblockPeer { id } => Self::unblock_peer(id, gossip),
@@ -210,29 +210,17 @@ impl P2pRpcRequest {
         }
     }
 
-    fn handle_discovery_table(sender: Sender<Vec<String>>, disc: &Discv5Handler) {
-        let enrs = disc.table_enrs();
-        tokio::spawn(async move {
-            let dt = match enrs.await {
-                Ok(dt) => dt.into_iter().map(|e| e.to_string()).collect(),
-
-                Err(e) => {
-                    warn!("Failed to receive peer count: {:?}", e);
-                    return;
-                }
-            };
-
-            if let Err(e) = sender.send(dt) {
-                warn!("Failed to send peer count through response channel: {:?}", e);
-            }
-        });
+    fn handle_discovery_table(sender: Sender<Vec<String>>) {
+        // TODO: This should be handled by the discovery service
+        if let Err(e) = sender.send(vec![]) {
+            warn!("Failed to send empty discovery table through response channel: {:?}", e);
+        }
     }
 
     fn handle_peers<G: ConnectionGate>(
         sender: Sender<PeerDump>,
         connected: bool,
         gossip: &GossipDriver<G>,
-        disc: &Discv5Handler,
     ) {
         let Ok(total_connected) = gossip.swarm.network_info().num_peers().try_into() else {
             error!(target: "p2p::rpc", "Failed to get total connected peers. The number of connected peers is too large and overflows u32.");
@@ -334,13 +322,9 @@ impl P2pRpcRequest {
             })
             .collect::<HashSet<_>>();
 
-        let disc_table_infos = disc.table_infos();
-
+        // TODO: Discovery table info should come from discovery service
         tokio::spawn(async move {
-            let Ok(table_infos) = disc_table_infos.await else {
-                error!(target: "p2p::rpc", "Failed to get table infos. The connection to the gossip driver is closed.");
-                return;
-            };
+            let table_infos: Vec<(discv5::enr::NodeId, discv5::Enr, String)> = vec![]; // Empty since no discovery service
 
             let pings = { pings.lock().await.clone() };
 
@@ -380,15 +364,7 @@ impl P2pRpcRequest {
                     let opstack_enr =
                         maybe_enr.clone().and_then(|enr| OpStackEnr::try_from(&enr).ok());
 
-                    let direction = maybe_status
-                        .map(|status| {
-                            if status.is_incoming() {
-                                Direction::Inbound
-                            } else {
-                                Direction::Outbound
-                            }
-                        })
-                        .unwrap_or_default();
+                    let direction = Direction::Outbound; // Default since no discovery info
 
                     let PeerMetadata { protocols, addresses, user_agent, protocol_version, score } =
                         peer_metadata.remove(peer_id).unwrap_or_default();
@@ -465,11 +441,8 @@ impl P2pRpcRequest {
     fn handle_peer_info<G: ConnectionGate>(
         sender: Sender<PeerInfo>,
         gossip: &GossipDriver<G>,
-        disc: &Discv5Handler,
     ) {
         let peer_id = *gossip.local_peer_id();
-        let chain_id = disc.chain_id;
-        let local_enr = disc.local_enr();
         let mut addresses = gossip
             .swarm
             .listeners()
@@ -484,41 +457,28 @@ impl P2pRpcRequest {
             &mut gossip.swarm.external_addresses().map(|a| a.to_string()).collect::<Vec<String>>(),
         );
 
-        tokio::spawn(async move {
-            let enr = match local_enr.await {
-                Ok(enr) => enr,
-                Err(e) => {
-                    warn!(target: "p2p::rpc", "Failed to receive local ENR: {:?}", e);
-                    return;
-                }
-            };
-
-            // Note: we need to use `Debug` impl here because the `Display` impl of
-            // `NodeId` strips some part of the hex string and replaces it with "...".
-            let node_id = format!("{:?}", &enr.node_id());
-
-            // We need to add the local multiaddr to the list of known addresses.
-            let peer_info = PeerInfo {
-                peer_id: peer_id.to_string(),
-                node_id,
-                user_agent: "kona".to_string(),
-                protocol_version: String::new(),
-                enr: Some(enr.to_string()),
-                addresses,
-                protocols: Some(vec![
-                    "/ipfs/id/push/1.0.0".to_string(),
-                    "/meshsub/1.1.0".to_string(),
-                    "/ipfs/ping/1.0.0".to_string(),
-                    "/meshsub/1.2.0".to_string(),
-                    "/ipfs/id/1.0.0".to_string(),
-                    "/opstack/req/payload_by_number/2151908/0/".to_string(),
-                    "/meshsub/1.0.0".to_string(),
-                    "/floodsub/1.0.0".to_string(),
-                ]),
-                connectedness: Connectedness::Connected,
-                direction: Direction::Inbound,
-                protected: false,
-                chain_id,
+        // TODO: Chain ID and ENR should come from the discovery service
+        let peer_info = PeerInfo {
+            peer_id: peer_id.to_string(),
+            node_id: format!("{:?}", peer_id),
+            user_agent: "kona".to_string(),
+            protocol_version: String::new(),
+            enr: None,
+            addresses,
+            protocols: Some(vec![
+                "/ipfs/id/push/1.0.0".to_string(),
+                "/meshsub/1.1.0".to_string(),
+                "/ipfs/ping/1.0.0".to_string(),
+                "/meshsub/1.2.0".to_string(),
+                "/ipfs/id/1.0.0".to_string(),
+                "/opstack/req/payload_by_number/2151908/0/".to_string(),
+                "/meshsub/1.0.0".to_string(),
+                "/floodsub/1.0.0".to_string(),
+            ]),
+            connectedness: Connectedness::Connected,
+            direction: Direction::Inbound,
+            protected: false,
+            chain_id: 0, // TODO: This should come from discovery service
                 latency: 0,
                 gossip_blocks: true,
                 peer_scores: PeerScores::default(),
@@ -526,17 +486,16 @@ impl P2pRpcRequest {
             if let Err(e) = sender.send(peer_info) {
                 warn!("Failed to send peer info through response channel: {:?}", e);
             }
-        });
     }
 
     fn handle_peer_stats<G: ConnectionGate>(
         sender: Sender<PeerStats>,
         gossip: &GossipDriver<G>,
-        disc: &Discv5Handler,
     ) {
         let peers_known = gossip.peerstore.len();
         let gossip_network_info = gossip.swarm.network_info();
-        let table_info = disc.peer_count();
+        // TODO: Discovery table info should come from discovery service
+        let table_info = futures::future::ready(Ok::<usize, ()>(0));
 
         let banned_peers = gossip.connection_gate.list_blocked_peers().len();
 
@@ -632,21 +591,11 @@ impl P2pRpcRequest {
     fn handle_peer_count<G: ConnectionGate>(
         sender: Sender<(Option<usize>, usize)>,
         gossip: &GossipDriver<G>,
-        disc: &Discv5Handler,
     ) {
-        let pc_req = disc.peer_count();
         let gossip_pc = gossip.connected_peers();
-        tokio::spawn(async move {
-            let pc = match pc_req.await {
-                Ok(pc) => Some(pc),
-                Err(e) => {
-                    warn!("Failed to receive peer count: {:?}", e);
-                    None
-                }
-            };
-            if let Err(e) = sender.send((pc, gossip_pc)) {
-                warn!("Failed to send peer count through response channel: {:?}", e);
-            }
-        });
+        // TODO: Discovery peer count should be handled by the discovery service
+        if let Err(e) = sender.send((None, gossip_pc)) {
+            warn!("Failed to send peer count through response channel: {:?}", e);
+        }
     }
 }

@@ -2,7 +2,7 @@
 
 use alloy_primitives::Address;
 use kona_genesis::RollupConfig;
-use kona_p2p::{Behaviour, BlockHandler, ConnectionGater, GaterConfig, GossipDriver};
+use kona_gossip::{Behaviour, BlockHandler, ConnectionGater, GaterConfig, GossipDriver};
 use libp2p::{Multiaddr, StreamProtocol, SwarmBuilder, identity::Keypair, multiaddr::Protocol};
 use std::{net::Ipv4Addr, time::Duration};
 
@@ -13,8 +13,8 @@ pub(crate) fn gossip_driver(port: u16) -> GossipDriver<ConnectionGater> {
     addr.push(Protocol::Ip4(Ipv4Addr::UNSPECIFIED));
     addr.push(Protocol::Tcp(port));
 
-    // Use the default `kona_p2p` config for the gossipsub protocol.
-    let config = kona_p2p::default_config();
+    // Use the default `kona_gossip` config for the gossipsub protocol.
+    let config = kona_gossip::default_config();
 
     let keypair = Keypair::generate_secp256k1();
 

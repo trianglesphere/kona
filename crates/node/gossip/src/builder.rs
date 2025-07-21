@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::watch::{self};
 
 use crate::{
-    Behaviour, BlockHandler, GossipDriver, GossipDriverBuilderError, gossip::gater::GaterConfig,
+    Behaviour, BlockHandler, GossipDriver, GossipDriverBuilderError, GaterConfig,
 };
 
 /// A builder for the [`GossipDriver`].
@@ -173,7 +173,7 @@ impl GossipDriverBuilder {
                 info!(target: "scoring", level = ?PeerScoreLevel::Off, "Peer scoring explicitly disabled")
             }
             Some(level) => {
-                use crate::gossip::handler::Handler;
+                use crate::handler::Handler;
                 let params = level
                     .to_params(handler.topics(), self.topic_scoring, block_time)
                     .unwrap_or_default();

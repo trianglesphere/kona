@@ -7,7 +7,7 @@ use jsonrpsee::{RpcModule, server::Server};
 use kona_node_service::{
     NetworkActor, NetworkBuilder, NetworkContext, NetworkInboundData, NodeActor,
 };
-use kona_p2p::P2pRpcRequest;
+use kona_gossip::P2pRpcRequest;
 use kona_rpc::{OpP2PApiServer, P2pRpc, RpcBuilder};
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};

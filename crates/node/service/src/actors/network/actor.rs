@@ -2,7 +2,7 @@ use alloy_primitives::Address;
 use alloy_signer::SignerSync;
 use alloy_signer_local::PrivateKeySigner;
 use async_trait::async_trait;
-use kona_p2p::P2pRpcRequest;
+use kona_gossip::P2pRpcRequest;
 use kona_rpc::NetworkAdminQuery;
 use libp2p::TransportError;
 use op_alloy_rpc_types_engine::{OpExecutionPayloadEnvelope, OpNetworkPayloadEnvelope};
@@ -220,7 +220,7 @@ impl NodeActor for NetworkActor {
                 }
                 Some(block) = self.publish_rx.recv(), if !self.publish_rx.is_closed() => {
                     let timestamp = block.payload.timestamp();
-                    let selector = |handler: &kona_p2p::BlockHandler| {
+                    let selector = |handler: &kona_gossip::BlockHandler| {
                         handler.topic(timestamp)
                     };
                     let Some(signer) = local_signer.as_ref() else {
@@ -269,7 +269,7 @@ impl NodeActor for NetworkActor {
                         error!(target: "node::p2p", "The p2p rpc receiver channel has closed");
                         return Err(NetworkActorError::ChannelClosed);
                     };
-                    req.handle(&mut handler.gossip, &handler.discovery);
+                    req.handle(&mut handler.gossip);
                 },
             }
         }
