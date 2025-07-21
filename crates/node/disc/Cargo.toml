@@ -19,13 +19,11 @@ workspace = true
 # Kona
 kona-peers.workspace = true
 kona-macros.workspace = true
-kona-genesis.workspace = true
 
 # Alloy
 alloy-rlp.workspace = true
 
 # Networking
-futures.workspace = true
 libp2p.workspace = true
 discv5 = { workspace = true, features = ["libp2p"] }
 
@@ -43,6 +41,7 @@ metrics = { workspace = true, optional = true }
 [dev-dependencies]
 tempfile.workspace = true
 kona-cli.workspace = true
+kona-genesis.workspace = true
 multihash.workspace = true
 serde_json.workspace = true
 rand = { workspace = true, features = ["thread_rng"] }

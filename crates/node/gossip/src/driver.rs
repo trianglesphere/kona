@@ -288,7 +288,7 @@ where
 
                 // If the peer is connected to gossip, record the connection duration.
                 if let Some(start_time) = self.peer_connection_start.get(&peer) {
-                    let ping_duration = start_time.elapsed();
+                    let _ping_duration = start_time.elapsed();
                     kona_macros::record!(
                         histogram,
                         crate::Metrics::GOSSIP_PEER_CONNECTION_DURATION_SECONDS,
@@ -297,7 +297,7 @@ where
                 }
 
                 // Record the peer score in the metrics if available.
-                if let Some(peer_score) = self.behaviour_mut().gossipsub.peer_score(&peer) {
+                if let Some(_peer_score) = self.behaviour_mut().gossipsub.peer_score(&peer) {
                     kona_macros::record!(
                         histogram,
                         crate::Metrics::PEER_SCORES,
@@ -404,7 +404,7 @@ where
 
                 self.peer_connection_start.insert(peer_id, Instant::now());
             }
-            SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+            SwarmEvent::OutgoingConnectionError { error, .. } => {
                 debug!(target: "gossip", "Outgoing connection error: {:?}", error);
                 kona_macros::inc!(
                     gauge,
@@ -413,7 +413,7 @@ where
                     "peer" => peer_id.map(|p| p.to_string()).unwrap_or_default()
                 );
             }
-            SwarmEvent::IncomingConnectionError { error, connection_id, .. } => {
+            SwarmEvent::IncomingConnectionError { error, .. } => {
                 debug!(target: "gossip", "Incoming connection error: {:?}", error);
                 kona_macros::inc!(
                     gauge,
@@ -435,7 +435,7 @@ where
 
                 // Record the total connection duration.
                 if let Some(start_time) = self.peer_connection_start.remove(&peer_id) {
-                    let peer_duration = start_time.elapsed();
+                    let _peer_duration = start_time.elapsed();
                     kona_macros::record!(
                         histogram,
                         crate::Metrics::GOSSIP_PEER_CONNECTION_DURATION_SECONDS,
@@ -444,7 +444,7 @@ where
                 }
 
                 // Record the peer score in the metrics if available.
-                if let Some(peer_score) = self.behaviour_mut().gossipsub.peer_score(&peer_id) {
+                if let Some(_peer_score) = self.behaviour_mut().gossipsub.peer_score(&peer_id) {
                     kona_macros::record!(
                         histogram,
                         crate::Metrics::PEER_SCORES,

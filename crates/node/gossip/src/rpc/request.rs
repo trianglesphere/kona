@@ -193,7 +193,7 @@ impl P2pRpcRequest {
             info!(target: "p2p::rpc", "Disconnected peer {}", peer_id);
             // Record the duration of the peer connection.
             if let Some(start_time) = gossip.peer_connection_start.remove(&peer_id) {
-                let peer_duration = start_time.elapsed();
+                let _peer_duration = start_time.elapsed();
                 kona_macros::record!(
                     histogram,
                     crate::Metrics::GOSSIP_PEER_CONNECTION_DURATION_SECONDS,
@@ -359,7 +359,7 @@ impl P2pRpcRequest {
             let infos: HashMap<String, PeerInfo, RandomState> = node_to_peer_id
                 .iter()
                 .map(|(id, peer_id)| {
-                    let (maybe_enr, maybe_status) = node_to_table_infos.get(id).cloned().unzip();
+                    let (maybe_enr, _maybe_status) = node_to_table_infos.get(id).cloned().unzip();
 
                     let opstack_enr =
                         maybe_enr.clone().and_then(|enr| OpStackEnr::try_from(&enr).ok());
