@@ -87,7 +87,8 @@ kona-registry = { path = "crates/protocol/registry", version = "0.3.0", default-
 kona-hardforks = { path = "crates/protocol/hardforks", version = "0.3.0", default-features = false }
 
 # Node
-kona-p2p = { path = "crates/node/p2p", version = "0.1.0", default-features = false }
+kona-disc = { path = "crates/node/disc", version = "0.1.0", default-features = false }
+kona-gossip = { path = "crates/node/gossip", version = "0.1.0", default-features = false }
 kona-rpc = { path = "crates/node/rpc", version = "0.2.0", default-features = false }
 kona-peers = { path = "crates/node/peers", version = "0.1.0", default-features = false }
 kona-engine = { path = "crates/node/engine", version = "0.1.0", default-features = false }

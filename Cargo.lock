@@ -2831,7 +2831,7 @@ dependencies = [
  "clap",
  "discv5",
  "kona-cli",
- "kona-p2p",
+ "kona-disc",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.19",
@@ -2845,8 +2845,8 @@ dependencies = [
  "clap",
  "discv5",
  "kona-cli",
+ "kona-disc",
  "kona-node-service",
- "kona-p2p",
  "kona-registry",
  "libp2p",
  "tokio",
@@ -4351,6 +4351,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "kona-disc"
+version = "0.1.0"
+dependencies = [
+ "alloy-primitives",
+ "arbitrary",
+ "backon",
+ "derive_more",
+ "discv5",
+ "futures",
+ "ipnet",
+ "kona-cli",
+ "kona-macros",
+ "kona-peers",
+ "lazy_static",
+ "libp2p-identity",
+ "metrics",
+ "multihash",
+ "openssl",
+ "rand 0.9.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kona-driver"
 version = "0.3.0"
 dependencies = [
@@ -4468,6 +4497,44 @@ dependencies = [
  "serde_repr",
  "thiserror 2.0.12",
  "toml",
+]
+
+[[package]]
+name = "kona-gossip"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types-engine",
+ "arbitrary",
+ "backon",
+ "derive_more",
+ "futures",
+ "ipnet",
+ "kona-cli",
+ "kona-genesis",
+ "kona-macros",
+ "kona-peers",
+ "lazy_static",
+ "libp2p",
+ "libp2p-identity",
+ "libp2p-stream",
+ "metrics",
+ "multihash",
+ "op-alloy-consensus",
+ "op-alloy-rpc-types-engine",
+ "openssl",
+ "rand 0.9.1",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "snap",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4600,10 +4667,11 @@ dependencies = [
  "jsonrpsee",
  "kona-cli",
  "kona-derive",
+ "kona-disc",
  "kona-engine",
  "kona-genesis",
+ "kona-gossip",
  "kona-node-service",
- "kona-p2p",
  "kona-peers",
  "kona-protocol",
  "kona-registry",
@@ -4652,11 +4720,12 @@ dependencies = [
  "http-body-util",
  "jsonrpsee",
  "kona-derive",
+ "kona-disc",
  "kona-engine",
  "kona-genesis",
+ "kona-gossip",
  "kona-interop",
  "kona-macros",
- "kona-p2p",
  "kona-peers",
  "kona-protocol",
  "kona-providers-alloy",
@@ -4925,11 +4994,12 @@ dependencies = [
  "getrandom 0.3.3",
  "ipnet",
  "jsonrpsee",
+ "kona-disc",
  "kona-engine",
  "kona-genesis",
+ "kona-gossip",
  "kona-interop",
  "kona-macros",
- "kona-p2p",
  "kona-protocol",
  "kona-supervisor-rpc",
  "libp2p",

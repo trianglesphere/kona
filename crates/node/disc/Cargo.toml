@@ -1,0 +1,57 @@
+[package]
+name = "kona-disc"
+version = "0.1.0"
+description = "Discovery library for the OP Stack"
+
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Kona
+kona-peers.workspace = true
+kona-macros.workspace = true
+
+# Alloy
+alloy-primitives = { workspace = true, features = ["k256", "getrandom"] }
+
+# Networking
+futures.workspace = true
+discv5 = { workspace = true, features = ["libp2p"] }
+openssl = { workspace = true, features = ["vendored"] }
+libp2p-identity = { workspace = true, features = ["secp256k1"] }
+ipnet = { workspace = true, features = ["serde"] }
+
+# Misc
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+serde_repr.workspace = true
+lazy_static.workspace = true
+rand = { workspace = true, features = ["thread_rng"] }
+backon = { workspace = true, features = ["std", "tokio", "tokio-sleep"] }
+derive_more = { workspace = true, features = ["display", "deref", "debug"] }
+
+# `metrics` feature
+metrics = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+kona-cli.workspace = true
+multihash.workspace = true
+serde_json.workspace = true
+rand = { workspace = true, features = ["thread_rng"] }
+arbitrary = { workspace = true, features = ["derive"] }
+
+[features]
+default = []
+metrics = [ "dep:metrics" ]
