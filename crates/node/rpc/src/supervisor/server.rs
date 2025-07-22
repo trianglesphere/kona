@@ -10,6 +10,7 @@ use jsonrpsee::{
 use kona_interop::{ControlEvent, ManagedEvent};
 use std::net::SocketAddr;
 use tokio::sync::broadcast;
+use tracing::{error, warn};
 
 /// The supervisor rpc for the kona-node.
 #[derive(Debug)]
@@ -63,7 +64,7 @@ impl SupervisorEventsServer for SupervisorRpcServer {
             let sub = match sink.accept().await {
                 Ok(s) => s,
                 Err(err) => {
-                    eprintln!("Failed to accept subscription: {:?}", err);
+                    error!(target: "rpc::supervisor", ?err, "Failed to accept subscription");
                     return;
                 }
             };
@@ -76,19 +77,19 @@ impl SupervisorEventsServer for SupervisorRpcServer {
                             id.clone(),
                             &String::from("Event received"),
                         ) else {
-                            eprintln!("Failed to create subscription message");
+                            error!(target: "rpc::supervisor", "Failed to create subscription message");
                             break;
                         };
                         if let Err(err) = sub.send(message).await {
-                            eprintln!("Client disconnected or error: {:?}", err);
+                            warn!(target: "rpc::supervisor", ?err, "Client disconnected or error");
                             break;
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        eprintln!("Lagged events, skipping...");
+                        warn!(target: "rpc::supervisor", "Lagged events, skipping");
                     }
                     Err(broadcast::error::RecvError::Closed) => {
-                        eprintln!("Channel closed, stopping subscription.");
+                        warn!(target: "rpc::supervisor", "Channel closed, stopping subscription");
                         break;
                     }
                 }

@@ -211,9 +211,6 @@ mod test {
     }
 
     fn run_frame_validity_test(test_case: FrameValidityTestCase) {
-        // #[cfg(feature = "std")]
-        // println!("Running test: {}", test_case.name);
-
         let id = [0xFF; 16];
         let block = BlockInfo::default();
         let mut channel = Channel::new(id, block);
