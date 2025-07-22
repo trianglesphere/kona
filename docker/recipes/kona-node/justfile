@@ -3,7 +3,39 @@ generate-jwt:
   @echo "Attempting to generate JWT secret"
   @bash ./generate-jwt.sh
 
-# Spins up the docker environment
+# Spins up L1 nodes first, then L2 nodes with full orchestration
+up-with-l1: generate-jwt
+  @echo "Starting L1 Execution Layer (Geth)..."
+  docker compose --env-file ./cfg.env up -d l1-geth
+  @echo "Waiting for L1 Geth to be healthy..."
+  @while ! docker compose --env-file ./cfg.env exec l1-geth sh -c 'curl -f http://localhost:8545 > /dev/null 2>&1'; do \
+    echo "Waiting for L1 Geth to start..."; \
+    sleep 5; \
+  done
+  @echo "L1 Geth is ready!"
+  
+  @echo "Starting L1 Consensus Layer (Lighthouse)..."
+  docker compose --env-file ./cfg.env up -d l1-lighthouse
+  @echo "Waiting for L1 Lighthouse to be healthy..."
+  @while ! docker compose --env-file ./cfg.env exec l1-lighthouse sh -c 'curl -f http://localhost:5052/eth/v1/node/health > /dev/null 2>&1'; do \
+    echo "Waiting for L1 Lighthouse to start..."; \
+    sleep 10; \
+  done
+  @echo "L1 Lighthouse is ready!"
+  
+  @echo "Starting L2 nodes (op-reth and kona-node)..."
+  docker compose --env-file ./cfg.env up -d
+  @echo "Full stack is now running!"
+  @echo ""
+  @echo "Services available:"
+  @echo "- L1 Geth RPC: http://localhost:${L1_GETH_HTTP_PORT:-8545}"
+  @echo "- L1 Lighthouse API: http://localhost:${L1_LIGHTHOUSE_HTTP_PORT:-5052}"
+  @echo "- L2 op-reth RPC: http://localhost:${OP_RETH_RPC_PORT:-8545}"
+  @echo "- L2 kona-node RPC: http://localhost:${KONA_NODE_RPC_PORT:-5060}"
+  @echo "- Grafana: http://localhost:3000"
+  @echo "- Prometheus: http://localhost:${PROMETHEUS_PORT:-9090}"
+
+# Spins up the docker environment (legacy command, L1 nodes required externally)
 up: generate-jwt
   docker compose --env-file ./cfg.env up -d
 

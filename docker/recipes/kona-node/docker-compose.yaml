@@ -1,6 +1,77 @@
 name: 'kona-node'
 
 services:
+  # L1 Execution Layer (Geth)
+  l1-geth:
+    restart: unless-stopped
+    image: ethereum/client-go:stable
+    ports:
+      - "${L1_GETH_HTTP_PORT:-8546}:8545"   # HTTP-RPC server
+      - "${L1_GETH_WS_PORT:-8547}:8546"     # WS-RPC server
+      - "${L1_GETH_ENGINE_PORT:-8552}:8551" # Engine API
+      - "${L1_GETH_P2P_PORT:-30304}:30303" # P2P networking
+      - "${L1_GETH_P2P_PORT:-30304}:30303/udp" # P2P networking
+    volumes:
+      - "l1_geth_data:/root/.ethereum"
+      - "./jwttoken:/root/jwt:ro"
+    command: >
+      --sepolia
+      --http
+      --http.addr=0.0.0.0
+      --http.port=8545
+      --http.api=eth,net,web3,debug,admin,txpool
+      --ws
+      --ws.addr=0.0.0.0
+      --ws.port=8546
+      --ws.api=eth,net,web3,debug,admin,txpool
+      --authrpc.addr=0.0.0.0
+      --authrpc.port=8551
+      --authrpc.jwtsecret=/root/jwt/jwt.hex
+      --syncmode=snap
+      --verbosity=3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8545 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # L1 Consensus Layer (Lighthouse)
+  l1-lighthouse:
+    restart: unless-stopped
+    image: sigp/lighthouse:stable
+    depends_on:
+      l1-geth:
+        condition: service_healthy
+    ports:
+      - "${L1_LIGHTHOUSE_HTTP_PORT:-5052}:5052"   # HTTP API
+      - "${L1_LIGHTHOUSE_P2P_PORT:-9000}:9000"    # P2P networking
+      - "${L1_LIGHTHOUSE_P2P_PORT:-9000}:9000/udp" # P2P networking
+    volumes:
+      - "l1_lighthouse_data:/root/.lighthouse"
+      - "./jwttoken:/root/jwt:ro"
+    command: >
+      beacon_node
+      --network=sepolia
+      --datadir=/root/.lighthouse
+      --http
+      --http-address=0.0.0.0
+      --http-port=5052
+      --execution-endpoint=http://l1-geth:8551
+      --execution-jwt=/root/jwt/jwt.hex
+      --checkpoint-sync-url=https://sepolia.beaconstate.info/
+      --subscribe-all-subnets
+      --import-all-attestations
+      --metrics
+      --metrics-address=0.0.0.0
+      --metrics-port=5054
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5052/eth/v1/node/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
   prometheus:
     restart: unless-stopped
     image: prom/prometheus:latest
@@ -36,6 +107,7 @@ services:
     image: ghcr.io/paradigmxyz/op-reth:latest
     depends_on:
       - prometheus
+      - l1-lighthouse
     ports:
       - "${OP_RETH_METRICS_PORT:-9001}:9001" # metrics
       - "${OP_RETH_DISCOVERY_PORT:-30303}:30303/tcp" # discovery
@@ -62,6 +134,7 @@ services:
     depends_on:
       - prometheus
       - op-reth
+      - l1-lighthouse
     ports:
       - "${KONA_NODE_DISCOVERY_PORT:-9223}:9223/tcp" # discovery
       - "${KONA_NODE_DISCOVERY_PORT:-9223}:9223/udp" # discovery
@@ -71,8 +144,8 @@ services:
       - "kona_data:/db"
       - "./jwttoken:/root/jwt:ro"
     environment:
-      L1_PROVIDER_RPC: ${L1_PROVIDER_RPC:?}
-      L1_BEACON_API: ${L1_BEACON_API:?}
+      L1_PROVIDER_RPC: ${L1_PROVIDER_RPC:-http://l1-geth:8545}
+      L1_BEACON_API: ${L1_BEACON_API:-http://l1-lighthouse:5052}
       RUST_LOG: ${RUST_LOG:-}
     command: >
       --l2-chain-id 11155420
@@ -100,4 +173,8 @@ volumes:
   kona_data:
     driver: local
   logs:
+    driver: local
+  l1_geth_data:
+    driver: local
+  l1_lighthouse_data:
     driver: local

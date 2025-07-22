@@ -13,15 +13,35 @@ By default, this recipe is configured to sync the [`OP Sepolia`][op-sepolia] L2.
 
 ## Usage
 
-### Running
+### Running with Local L1 Nodes (Recommended)
 
-An L1 Execution Client RPC and L1 Beacon API endpoint must be configured in your environment. The `L1_PROVIDER_RPC` and
+The simplest way to run the complete stack is using the orchestrated startup command that will spin up L1 nodes first, then L2 nodes:
+
+```sh
+# Start the full stack: L1 Geth + Lighthouse, then L2 op-reth + kona-node
+just up-with-l1
+
+# Shutdown the docker compose environment
+just down
+
+# Restart the docker compose environment  
+just restart
+```
+
+This command will:
+1. Start L1 Execution Layer (Geth) and wait for it to be healthy
+2. Start L1 Consensus Layer (Lighthouse) and wait for it to be healthy  
+3. Start L2 nodes (op-reth and kona-node) along with monitoring services
+
+### Running with External L1 Nodes
+
+If you prefer to use external L1 nodes, you must configure the L1 endpoints in your environment. The `L1_PROVIDER_RPC` and
 `L1_BEACON_API` environment variables can be set in [`cfg.env`](./cfg.env).
 
 Once these two environment variables are set, the environment can be spun up and shut down as follows:
 
 ```sh
-# Start `kona-node`, `op-reth`, and `grafana` + `prometheus`
+# Start `kona-node`, `op-reth`, and `grafana` + `prometheus` (requires external L1 nodes)
 just up
 
 # Shutdown the docker compose environment
@@ -30,6 +50,17 @@ just down
 # Restart the docker compose environment
 just restart
 ```
+
+### Service Endpoints
+
+When running with `just up-with-l1`, the following services will be available:
+
+- **L1 Geth RPC**: `http://localhost:8546` (HTTP), `http://localhost:8547` (WebSocket)
+- **L1 Lighthouse API**: `http://localhost:5052`  
+- **L2 op-reth RPC**: `http://localhost:8545`
+- **L2 kona-node RPC**: `http://localhost:5060`
+- **Grafana Dashboard**: `http://localhost:3000` (admin/admin)
+- **Prometheus**: `http://localhost:9090`
 
 ### Grafana
 
@@ -49,13 +80,21 @@ before making a PR.
 
 ### Adjusting host ports
 
-Host ports for both `op-reth` and `kona-node` can be configured in [`cfg.env`](./cfg.env).
+Host ports for L1 nodes, `op-reth` and `kona-node` can be configured in [`cfg.env`](./cfg.env). Note that default ports have been chosen to avoid conflicts:
+
+- L1 Geth: 8546 (HTTP), 8547 (WS), 8552 (Engine), 30304 (P2P)
+- L1 Lighthouse: 5052 (HTTP), 9000 (P2P)
+- L2 op-reth: 8545 (HTTP), 8551 (Engine), 30303 (P2P)  
+- L2 kona-node: 5060 (RPC), 9223 (P2P)
 
 ### Syncing a different OP Stack chain
 
 To adjust the chain that the node is syncing, you must modify the `docker-compose.yml` file to specify the desired
 network parameters. Specifically:
-1. Ensure `L1_PROVIDER_RPC` and `L1_BEACON_API` are set to L1 clients that represent the settlement layer of the L2.
+1. `L1 nodes` (when using `up-with-l1`):
+   - For `l1-geth`: change `--sepolia` to the desired L1 network (e.g., `--mainnet`, `--goerli`)
+   - For `l1-lighthouse`: change `--network=sepolia` to the desired network and update `--checkpoint-sync-url`
+1. When using external L1 nodes: Ensure `L1_PROVIDER_RPC` and `L1_BEACON_API` are set to L1 clients that represent the settlement layer of the L2.
 1. `op-reth`
     - `--chain` must specify the desired chain.
     - `--rollup.sequencer-http` must specify the sequencer endpoint.
