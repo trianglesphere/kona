@@ -15,7 +15,7 @@ services:
       - "l1_geth_data:/root/.ethereum"
       - "./jwttoken:/root/jwt:ro"
     command: >
-      --sepolia
+      --${L1_NETWORK:-sepolia}
       --http
       --http.addr=0.0.0.0
       --http.port=8545
@@ -52,14 +52,14 @@ services:
       - "./jwttoken:/root/jwt:ro"
     command: >
       beacon_node
-      --network=sepolia
+      --network=${L1_NETWORK:-sepolia}
       --datadir=/root/.lighthouse
       --http
       --http-address=0.0.0.0
       --http-port=5052
       --execution-endpoint=http://l1-geth:8551
       --execution-jwt=/root/jwt/jwt.hex
-      --checkpoint-sync-url=https://sepolia.beaconstate.info/
+      --checkpoint-sync-url=${L1_CHECKPOINT_SYNC_URL:-https://sepolia.beaconstate.info/}
       --subscribe-all-subnets
       --import-all-attestations
       --metrics
@@ -121,8 +121,8 @@ services:
     command: >
       node
       --datadir /db
-      --chain optimism-sepolia
-      --rollup.sequencer-http https://sepolia-sequencer.optimism.io/
+      --chain ${L2_CHAIN:-optimism-sepolia}
+      --rollup.sequencer-http ${L2_SEQUENCER_HTTP:-https://sepolia-sequencer.optimism.io/}
       --metrics 0.0.0.0:9001
       --log.file.directory /root/logs
       --authrpc.addr 0.0.0.0 --authrpc.port 8551 --authrpc.jwtsecret /root/jwt/jwt.hex
@@ -148,7 +148,7 @@ services:
       L1_BEACON_API: ${L1_BEACON_API:-http://l1-lighthouse:5052}
       RUST_LOG: ${RUST_LOG:-}
     command: >
-      --l2-chain-id 11155420
+      --l2-chain-id ${L2_CHAIN_ID:-11155420}
       --metrics.enabled
       --metrics.port 9002
       node

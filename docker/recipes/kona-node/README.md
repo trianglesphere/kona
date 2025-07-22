@@ -89,17 +89,17 @@ Host ports for L1 nodes, `op-reth` and `kona-node` can be configured in [`cfg.en
 
 ### Syncing a different OP Stack chain
 
-To adjust the chain that the node is syncing, you must modify the `docker-compose.yml` file to specify the desired
+To adjust the chain that the node is syncing, you must modify the `cfg.env` file to specify the desired
 network parameters. Specifically:
 1. `L1 nodes` (when using `up-with-l1`):
-   - For `l1-geth`: change `--sepolia` to the desired L1 network (e.g., `--mainnet`, `--goerli`)
-   - For `l1-lighthouse`: change `--network=sepolia` to the desired network and update `--checkpoint-sync-url`
+   - Set `L1_NETWORK` to the desired L1 network (e.g., `mainnet`, `sepolia`, `holesky`)
+   - Set `L1_CHECKPOINT_SYNC_URL` to the appropriate checkpoint sync URL for the network
 1. When using external L1 nodes: Ensure `L1_PROVIDER_RPC` and `L1_BEACON_API` are set to L1 clients that represent the settlement layer of the L2.
-1. `op-reth`
-    - `--chain` must specify the desired chain.
-    - `--rollup.sequencer-http` must specify the sequencer endpoint.
-1. `kona-node`
-    - `--l2-chain-id` must specify the chain ID of the desired chain.
+1. `op-reth`:
+   - Set `L2_CHAIN` to specify the desired L2 chain (e.g., `optimism`, `optimism-sepolia`, `base`, `base-sepolia`)
+   - Set `L2_SEQUENCER_HTTP` to specify the sequencer endpoint for the L2 chain
+1. `kona-node`:
+   - Set `L2_CHAIN_ID` to specify the chain ID of the desired L2 chain
 
 ### Adjusting log filters
 
