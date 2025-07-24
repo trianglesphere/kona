@@ -4,7 +4,63 @@ use crate::Metrics;
 use alloy_rpc_types_engine::ForkchoiceState;
 use kona_protocol::L2BlockInfo;
 
-/// The sync state of the engine.
+/// Synchronization state tracking different blockchain head pointers for an OP Stack rollup.
+///
+/// The engine maintains multiple head pointers that represent different levels of
+/// blockchain finality and cross-chain verification. This multi-head model enables
+/// the rollup to operate with different safety guarantees while maintaining
+/// compatibility with L1 finality.
+///
+/// ## Head Hierarchy (by Safety Level)
+///
+/// 1. **Finalized Head** (Highest Safety)
+///    - Derived from finalized L1 data  
+///    - Only has finalized L1 dependencies
+///    - Cannot be reverted under normal conditions
+///    - Updates every ~12 minutes with L1 finalization
+///
+/// 2. **Safe Head** (High Safety)
+///    - Derived from L1 and cross-verified
+///    - Has cross-safe dependencies confirmed
+///    - Resistant to L1 reorgs within safe confirmation depth
+///    - Updates as L1 derivation proceeds
+///
+/// 3. **Local Safe Head** (Medium Safety)  
+///    - Derived locally from L1 data
+///    - Completed span-batch but not cross-verified
+///    - May be reverted if cross-verification fails
+///    - Pre-interop: same as safe head
+///
+/// 4. **Cross-Unsafe Head** (Low Safety)
+///    - Cross-verified unsafe head
+///    - Pre-interop: always equal to unsafe head
+///    - Post-interop: verified against cross-chain dependencies
+///    - May be behind unsafe head during verification delays
+///
+/// 5. **Unsafe Head** (Lowest Safety)
+///    - Most recent block from P2P network
+///    - Not yet verified against L1 data
+///    - May be invalid or subject to reorg
+///    - Updates immediately upon block receipt
+///
+/// ## Invariants
+///
+/// The engine maintains these ordering invariants:
+/// ```ignore
+/// finalized_head <= safe_head <= local_safe_head <= cross_unsafe_head <= unsafe_head
+/// ```
+///
+/// These invariants ensure:
+/// - **Safety Progression**: Higher safety levels never regress beyond lower ones  
+/// - **Finality Ordering**: Finalized state is always the most conservative
+/// - **Consistency**: State updates maintain logical blockchain progression
+///
+/// ## Cross-Chain Verification (Interop)
+///
+/// In interop mode, cross-verification ensures dependencies across multiple chains:
+/// - **Cross-Unsafe**: Unsafe blocks verified against cross-chain dependencies
+/// - **Cross-Safe**: Safe blocks with confirmed cross-chain safety
+/// - **Cross-Finalized**: Finalized blocks with all cross-chain dependencies finalized
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EngineSyncState {
     /// Most recent block found on the p2p network
@@ -62,8 +118,39 @@ impl EngineSyncState {
         }
     }
 
-    /// Applies the update to the provided sync state, using the current state values if the update
-    /// is not specified. Returns the new sync state.
+    /// Applies partial updates to the sync state while preserving unchanged values.
+    ///
+    /// This method enables atomic updates of specific head pointers without affecting
+    /// others. Each head pointer is updated only if the corresponding field in the
+    /// update struct is `Some`, otherwise the current value is preserved.
+    ///
+    /// ## Update Semantics
+    /// - **Partial Updates**: Only specified heads are modified
+    /// - **Atomic Application**: All updates applied together or none at all
+    /// - **Metrics Integration**: Automatically records head advancement metrics
+    /// - **Invariant Preservation**: Caller responsible for maintaining head ordering
+    ///
+    /// ## Parameters
+    /// - `sync_state_update`: Contains optional updates for each head pointer
+    ///
+    /// ## Returns
+    /// New sync state with updates applied and unchanged values preserved
+    ///
+    /// ## Example Usage
+    /// ```ignore
+    /// let update = EngineSyncStateUpdate {
+    ///     unsafe_head: Some(new_unsafe_block),
+    ///     safe_head: Some(new_safe_block),
+    ///     ..Default::default()
+    /// };
+    /// let new_state = current_state.apply_update(update);
+    /// ```
+    ///
+    /// ## Metrics Side Effects
+    /// Updates automatically record metrics for:
+    /// - Block number advancement for each updated head
+    /// - Head pointer state transitions
+    /// - Sync progress indicators
     pub fn apply_update(self, sync_state_update: EngineSyncStateUpdate) -> Self {
         if let Some(unsafe_head) = sync_state_update.unsafe_head {
             Self::update_block_label_metric(
@@ -111,7 +198,53 @@ impl EngineSyncState {
     }
 }
 
-/// Specifies how to update the sync state of the engine.
+/// Partial update specification for engine synchronization state.
+///
+/// This structure enables selective updates of specific head pointers in the engine
+/// sync state without requiring all heads to be modified simultaneously. Each field
+/// is optional, allowing fine-grained control over which heads are updated.
+///
+/// ## Design Principles
+/// - **Selective Updates**: Only modify specified head pointers
+/// - **Backward Compatibility**: Unspecified heads retain current values
+/// - **Atomic Semantics**: All specified updates applied together
+/// - **Type Safety**: Optional fields prevent accidental overwrites
+///
+/// ## Usage Patterns
+///
+/// ### Single Head Update
+/// ```ignore
+/// let update = EngineSyncStateUpdate {
+///     unsafe_head: Some(new_block),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// ### Multiple Head Update
+/// ```ignore  
+/// let update = EngineSyncStateUpdate {
+///     safe_head: Some(new_safe),
+///     finalized_head: Some(new_finalized),
+///     ..Default::default()
+/// };
+/// ```
+///
+/// ### Full State Sync
+/// ```ignore
+/// let update = EngineSyncStateUpdate {
+///     unsafe_head: Some(unsafe_block),
+///     cross_unsafe_head: Some(cross_unsafe_block),
+///     local_safe_head: Some(local_safe_block),
+///     safe_head: Some(safe_block),
+///     finalized_head: Some(finalized_block),
+/// };
+/// ```
+///
+/// ## Error Prevention
+/// Using optional fields helps prevent common errors:
+/// - **Accidental Overwrites**: Must explicitly specify each update
+/// - **Default Value Issues**: No risk of using uninitialized values
+/// - **Partial Update Bugs**: Clear distinction between "update" and "keep current"
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EngineSyncStateUpdate {
     /// Most recent block found on the p2p network
@@ -128,7 +261,54 @@ pub struct EngineSyncStateUpdate {
     pub finalized_head: Option<L2BlockInfo>,
 }
 
-/// The chain state viewed by the engine controller.
+/// Complete state of the engine controller, encompassing synchronization and operational status.
+///
+/// The engine state combines blockchain synchronization information with operational
+/// flags that control engine behavior. This unified state model enables atomic
+/// updates and consistent decision-making across all engine operations.
+///
+/// ## State Components
+///
+/// ### Synchronization State ([`EngineSyncState`])
+/// Tracks multiple blockchain head pointers representing different safety levels:
+/// - **Unsafe Head**: Latest P2P gossip (may be invalid)
+/// - **Cross-Unsafe Head**: Cross-verified unsafe head (interop mode)
+/// - **Local Safe Head**: L1-derived, completed span-batch
+/// - **Safe Head**: L1-derived and cross-verified
+/// - **Finalized Head**: Derived from finalized L1 data
+///
+/// ### Execution Layer Status
+/// Tracks whether the execution layer has completed initial synchronization:
+/// - **Syncing**: EL is still catching up to current head
+/// - **Synced**: EL is fully synchronized and ready for normal operation
+///
+/// ### Reorg Recovery Flags
+/// Controls special forkchoice update behavior during chain reorganizations:
+/// - **Backup Unsafe Reorg**: Forces forkchoice update during unsafe chain recovery
+/// - **Context**: Invalid span batches, sequencer errors, L1 reorgs
+///
+/// ## State Transitions
+///
+/// State updates occur through several mechanisms:
+/// 1. **Task Completion**: Successful tasks update relevant state components
+/// 2. **External Events**: L1 finality, P2P gossip, sequencer blocks
+/// 3. **Error Recovery**: Reset operations, reorg handling, sync failures
+/// 4. **Configuration Changes**: System config updates, fork activations
+///
+/// ## Consistency Guarantees
+///
+/// The engine maintains several invariants:
+/// - **Head Ordering**: Finalized ≤ Safe ≤ Local Safe ≤ Cross-Unsafe ≤ Unsafe
+/// - **EL Sync Logic**: Sync status affects task execution priorities
+/// - **Recovery State**: Reorg flags prevent inconsistent forkchoice updates
+///
+/// ## Decision Making
+///
+/// Engine state drives operational decisions:
+/// - **Consolidation**: Whether unsafe head needs L1 validation
+/// - **Task Priorities**: EL sync status affects scheduling
+/// - **Error Handling**: Recovery flags influence retry logic
+/// - **Forkchoice Updates**: Sync state determines forkchoice parameters
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct EngineState {
     /// The sync state of the engine.
@@ -146,13 +326,48 @@ pub struct EngineState {
 }
 
 impl EngineState {
-    /// Returns if consolidation is needed.
+    /// Determines whether consolidation is needed to advance the safe chain.
     ///
-    /// [Consolidation] is only performed by a rollup node when the unsafe head
-    /// is ahead of the safe head. When the two are equal, consolidation isn't
-    /// required and the [`crate::BuildTask`] can be used to build the block.
+    /// [Consolidation] is the process of validating unsafe blocks against L1-derived
+    /// data to potentially advance the safe head. This process is only needed when
+    /// the unsafe chain has progressed beyond the safe chain.
+    ///
+    /// ## Consolidation Logic
+    ///
+    /// ### When Consolidation is Needed (`true`)
+    /// - **Unsafe ahead of Safe**: `unsafe_head.number > safe_head.number`
+    /// - **Purpose**: Validate unsafe blocks against L1 derivation data
+    /// - **Process**: Compare derived attributes with actual unsafe block
+    /// - **Outcome**: Advance safe head if attributes match, rebuild block if not
+    ///
+    /// ### When Consolidation is Not Needed (`false`)
+    /// - **Heads Equal**: `unsafe_head == safe_head`
+    /// - **Alternative**: Use [`BuildTask`] for new block creation
+    /// - **Context**: Normal sequencer operation, no pending validation
+    ///
+    /// ## State Implications
+    ///
+    /// ### Consolidation Required
+    /// ```ignore
+    /// unsafe_head: Block #100
+    /// safe_head:   Block #98
+    /// // Need to validate blocks #99 and #100 against L1 data
+    /// ```
+    ///
+    /// ### No Consolidation Required
+    /// ```ignore
+    /// unsafe_head: Block #100  
+    /// safe_head:   Block #100
+    /// // Chains are synchronized, can build new block #101
+    /// ```
+    ///
+    /// ## Performance Considerations
+    /// - **Consolidation**: More expensive, involves L1 derivation and validation
+    /// - **Direct Building**: Faster, skips validation for already-safe blocks
+    /// - **Batching**: Multiple blocks may be consolidated in sequence
     ///
     /// [Consolidation]: https://specs.optimism.io/protocol/derivation.html#l1-consolidation-payload-attributes-matching
+    /// [`BuildTask`]: crate::BuildTask
     pub fn needs_consolidation(&self) -> bool {
         self.sync_state.safe_head() != self.sync_state.unsafe_head()
     }

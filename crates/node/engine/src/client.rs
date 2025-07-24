@@ -35,7 +35,34 @@ use thiserror::Error;
 use tower::ServiceBuilder;
 use url::Url;
 
-/// An error that occurred in the [`EngineClient`].
+/// Comprehensive error types for [`EngineClient`] operations.
+///
+/// The engine client can encounter various failure modes during RPC communication
+/// and data processing. These errors provide detailed context for debugging and
+/// appropriate error handling strategies.
+///
+/// ## Error Categories
+///
+/// ### RPC Communication Errors
+/// Network-level and protocol-level failures during RPC calls:
+/// - **Connection Issues**: Network timeouts, DNS resolution failures
+/// - **Authentication Problems**: JWT token validation, credential issues
+/// - **Protocol Errors**: HTTP/JSON-RPC malformed requests or responses
+/// - **Rate Limiting**: Provider throttling, quota exceeded errors
+///
+/// ### Data Processing Errors  
+/// Issues with blockchain data structure validation and conversion:
+/// - **Invalid Block Data**: Malformed block headers, transaction data
+/// - **Consensus Violations**: Block data violating chain consensus rules
+/// - **Encoding Issues**: RLP decoding errors, invalid field formats
+/// - **Genesis Mismatches**: Block data incompatible with rollup genesis
+///
+/// ## Error Context
+/// Errors provide context about:
+/// - **Operation**: Which client method failed (block retrieval, payload creation)
+/// - **Parameters**: What inputs caused the failure (block numbers, hashes)
+/// - **Provider**: Whether error originated from L1 or L2 provider
+/// - **Severity**: Whether error is temporary (retry) or permanent (critical)
 #[derive(Error, Debug)]
 pub enum EngineClientError {
     /// An RPC error occurred
@@ -49,7 +76,58 @@ pub enum EngineClientError {
 /// A Hyper HTTP client with a JWT authentication layer.
 type HyperAuthClient<B = Full<Bytes>> = HyperClient<B, AuthService<Client<HttpConnector, B>>>;
 
-/// An external engine api client
+/// High-level engine API client providing authenticated access to execution layer and L1/L2 providers.
+///
+/// The [`EngineClient`] serves as the primary interface for all blockchain RPC operations
+/// within the kona engine. It manages authenticated connections to multiple providers
+/// and provides convenient methods for common operations like block retrieval and
+/// engine API calls.
+///
+/// ## Architecture
+///
+/// ### Multi-Provider Design
+/// The client maintains separate providers for different purposes:
+/// - **Engine Provider**: Authenticated connection to execution layer (EL)
+/// - **L2 Provider**: Direct connection to L2 chain for block/state queries  
+/// - **L1 Provider**: Connection to L1 chain for derivation and finality data
+///
+/// ### Authentication Model
+/// - **JWT Authentication**: Engine and L2 providers use JWT tokens for security
+/// - **HTTP Transport**: All connections use HTTP with JWT authentication layer
+/// - **Connection Pooling**: Underlying HTTP client handles connection reuse
+///
+/// ### API Version Selection
+/// The client automatically selects appropriate Engine API versions based on:
+/// - **Block Timestamps**: Different versions activated at specific times
+/// - **Rollup Configuration**: Chain-specific activation schedules
+/// - **Protocol Features**: Support for new payload formats and capabilities
+///
+/// ## Usage Patterns
+///
+/// ### Block Data Retrieval
+/// ```ignore
+/// let block = client.l2_block_by_label(BlockNumberOrTag::Latest).await?;
+/// let block_info = client.l2_block_info_by_label(block_number.into()).await?;
+/// ```
+///
+/// ### Engine API Operations
+/// ```ignore
+/// let status = client.new_payload_v3(payload, parent_beacon_root).await?;
+/// let result = client.fork_choice_updated_v2(forkchoice, attributes).await?;
+/// let envelope = client.get_payload_v3(payload_id).await?;
+/// ```
+///
+/// ## Error Handling
+/// All methods return [`Result`] types with detailed error information:
+/// - **Network Errors**: Connection issues, timeouts, authentication failures
+/// - **Protocol Errors**: Invalid requests, unsupported operations
+/// - **Data Errors**: Malformed responses, validation failures
+///
+/// ## Performance Characteristics
+/// - **Connection Reuse**: HTTP client pools connections for efficiency
+/// - **Concurrent Operations**: Multiple RPC calls can execute simultaneously
+/// - **Metrics Integration**: All operations automatically record performance metrics
+/// - **JWT Overhead**: Authentication adds minimal latency to requests
 #[derive(Debug, Deref, Clone)]
 pub struct EngineClient {
     /// The L2 engine provider.
@@ -76,7 +154,57 @@ impl EngineClient {
         RootProvider::<T>::new(rpc_client)
     }
 
-    /// Creates a new [`EngineClient`] from the provided [Url] and [JwtSecret].
+    /// Creates a new [`EngineClient`] with HTTP transport and JWT authentication.
+    ///
+    /// This constructor establishes authenticated connections to all required providers
+    /// and configures the client for Engine API operations. The client maintains
+    /// separate providers for different purposes while sharing authentication credentials.
+    ///
+    /// ## Parameters
+    /// - `engine`: URL for execution layer Engine API endpoint (with JWT auth)
+    /// - `l2_rpc`: URL for L2 chain RPC endpoint (with JWT auth)  
+    /// - `l1_rpc`: URL for L1 chain RPC endpoint (no auth required)
+    /// - `cfg`: Rollup configuration for Engine API version selection
+    /// - `jwt`: Shared JWT secret for authenticated endpoints
+    ///
+    /// ## Connection Setup
+    /// 
+    /// ### Engine Provider (Authenticated)
+    /// - **Purpose**: Engine API calls (newPayload, forkchoiceUpdated, getPayload)
+    /// - **Network**: AnyNetwork (generic Ethereum-compatible)
+    /// - **Auth**: JWT authentication layer
+    /// - **Transport**: HTTP with Hyper client
+    ///
+    /// ### L2 Provider (Authenticated)  
+    /// - **Purpose**: L2 block queries, transaction data, state access
+    /// - **Network**: Optimism (OP Stack specific types)
+    /// - **Auth**: JWT authentication layer  
+    /// - **Transport**: HTTP with Hyper client
+    ///
+    /// ### L1 Provider (Public)
+    /// - **Purpose**: L1 block data, finality information, derivation sources
+    /// - **Network**: Ethereum mainnet (or testnet)
+    /// - **Auth**: None (public RPC endpoint)
+    /// - **Transport**: Standard HTTP transport
+    ///
+    /// ## Authentication Model
+    /// JWT authentication is applied to engine and L2 providers to ensure:
+    /// - **Access Control**: Only authorized clients can modify execution state
+    /// - **Request Integrity**: JWT signatures prevent request tampering
+    /// - **Session Management**: Tokens can be rotated for security
+    ///
+    /// ## Configuration Usage
+    /// The rollup configuration enables:
+    /// - **API Version Selection**: Choose appropriate Engine API versions by timestamp
+    /// - **Chain Parameters**: Validate operations against chain-specific rules
+    /// - **Protocol Features**: Enable/disable features based on activation schedules
+    ///
+    /// ## Error Scenarios
+    /// Construction can fail due to:
+    /// - **Invalid URLs**: Malformed endpoint addresses
+    /// - **JWT Issues**: Invalid or expired authentication tokens
+    /// - **Network Problems**: DNS resolution, connection establishment failures
+    /// - **Configuration Errors**: Invalid rollup configuration parameters
     pub fn new_http(
         engine: Url,
         l2_rpc: Url,
@@ -114,7 +242,57 @@ impl EngineClient {
         Ok(<RootProvider<Optimism>>::get_block_by_number(&self.l2_provider, numtag).full().await?)
     }
 
-    /// Fetches the [L2BlockInfo] by [BlockNumberOrTag].
+    /// Retrieves L2 block information with OP Stack specific metadata.
+    ///
+    /// This method fetches a complete L2 block and extracts the OP Stack specific
+    /// metadata required for rollup operations. The extracted information includes
+    /// L1 origin data, sequencer information, and other rollup-specific fields.
+    ///
+    /// ## Parameters
+    /// - `numtag`: Block identifier (number, hash, or tag like "latest")
+    ///
+    /// ## Returns
+    /// - `Some(L2BlockInfo)`: Block found and successfully parsed
+    /// - `None`: Block not found at the specified identifier
+    /// - `Err(EngineClientError)`: RPC error or block parsing failure
+    ///
+    /// ## Block Processing Steps
+    /// 1. **RPC Query**: Fetch full block data from L2 provider
+    /// 2. **Consensus Conversion**: Convert RPC block to consensus format
+    /// 3. **Metadata Extraction**: Parse OP Stack specific fields from block
+    /// 4. **Genesis Validation**: Verify block compatibility with rollup genesis
+    ///
+    /// ## Error Contexts
+    ///
+    /// ### RPC Errors
+    /// - **Network Issues**: Connection timeouts, DNS resolution failures
+    /// - **Authentication**: JWT token validation problems
+    /// - **Provider Errors**: L2 node unavailable, database corruption
+    ///
+    /// ### Block Parsing Errors
+    /// - **Invalid Structure**: Block missing required OP Stack fields
+    /// - **Genesis Mismatch**: Block incompatible with configured genesis
+    /// - **Encoding Issues**: Unable to decode block metadata
+    ///
+    /// ## Usage Patterns
+    /// ```ignore
+    /// // Get latest block info
+    /// let latest = client.l2_block_info_by_label(BlockNumberOrTag::Latest).await?;
+    ///
+    /// // Get specific block by number
+    /// let block_info = client.l2_block_info_by_label(12345.into()).await?;
+    ///
+    /// // Handle missing blocks
+    /// match client.l2_block_info_by_label(future_block.into()).await? {
+    ///     Some(info) => process_block(info),
+    ///     None => log::warn!("Block not yet available"),
+    /// }
+    /// ```
+    ///
+    /// ## Performance Considerations
+    /// - **Full Block Retrieval**: Fetches complete block data including transactions
+    /// - **Parsing Overhead**: Additional processing to extract OP Stack metadata
+    /// - **Cache Behavior**: Results may be cached by underlying RPC provider
     pub async fn l2_block_info_by_label(
         &self,
         numtag: BlockNumberOrTag,
