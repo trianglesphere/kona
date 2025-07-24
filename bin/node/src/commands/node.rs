@@ -43,16 +43,16 @@ pub struct NodeCommand {
     )]
     pub node_mode: NodeMode,
     /// URL of the L1 execution client RPC API.
-    #[arg(long, visible_alias = "l1", env = "KONA_NODE_L1_ETH_RPC")]
+    #[arg(long, visible_alias = "l1", env = "KONA_NODE_L1_ETH_RPC", default_value = "http://localhost:8545")]
     pub l1_eth_rpc: Url,
     /// URL of the L1 beacon API.
-    #[arg(long, visible_alias = "l1.beacon", env = "KONA_NODE_L1_BEACON")]
+    #[arg(long, visible_alias = "l1.beacon", env = "KONA_NODE_L1_BEACON", default_value = "http://localhost:5052")]
     pub l1_beacon: Url,
     /// URL of the engine API endpoint of an L2 execution client.
-    #[arg(long, visible_alias = "l2", env = "KONA_NODE_L2_ENGINE_RPC")]
+    #[arg(long, visible_alias = "l2", env = "KONA_NODE_L2_ENGINE_RPC", default_value = "http://localhost:8551")]
     pub l2_engine_rpc: Url,
     /// An L2 RPC Url.
-    #[arg(long, visible_alias = "l2.provider", env = "KONA_NODE_L2_ETH_RPC")]
+    #[arg(long, visible_alias = "l2.provider", env = "KONA_NODE_L2_ETH_RPC", default_value = "http://localhost:8545")]
     pub l2_provider_rpc: Url,
     /// JWT secret for the auth-rpc endpoint of the execution client.
     /// This MUST be a valid path to a file containing the hex-encoded JWT secret.
@@ -285,62 +285,40 @@ mod tests {
     use super::*;
 
     const fn default_flags() -> &'static [&'static str] {
-        &[
-            "--l1-eth-rpc",
-            "http://localhost:8545",
-            "--l1-beacon",
-            "http://localhost:5052",
-            "--l2-engine-rpc",
-            "http://localhost:8551",
-            "--l2-provider-rpc",
-            "http://localhost:8545",
-        ]
+        &[]  // No longer need to specify required flags since they have defaults
     }
 
     #[test]
     fn test_node_cli_defaults() {
-        let args = NodeCommand::parse_from(["node"].iter().chain(default_flags().iter()).copied());
+        let args = NodeCommand::parse_from(["node"]);
         assert_eq!(args.node_mode, NodeMode::Validator);
     }
 
     #[test]
-    fn test_node_cli_missing_l1_eth_rpc() {
-        let err = NodeCommand::try_parse_from(["node"]).unwrap_err();
-        assert!(err.to_string().contains("--l1-eth-rpc"));
+    fn test_node_cli_default_values() {
+        let args = NodeCommand::parse_from(["node"]);
+        assert_eq!(args.l1_eth_rpc.as_str(), "http://localhost:8545");
+        assert_eq!(args.l1_beacon.as_str(), "http://localhost:5052");
+        assert_eq!(args.l2_engine_rpc.as_str(), "http://localhost:8551");
+        assert_eq!(args.l2_provider_rpc.as_str(), "http://localhost:8545");
     }
 
     #[test]
-    fn test_node_cli_missing_l1_beacon() {
-        let err = NodeCommand::try_parse_from(["node", "--l1-eth-rpc", "http://localhost:8545"])
-            .unwrap_err();
-        assert!(err.to_string().contains("--l1-beacon"));
-    }
-
-    #[test]
-    fn test_node_cli_missing_l2_engine_rpc() {
-        let err = NodeCommand::try_parse_from([
+    fn test_node_cli_custom_values() {
+        let args = NodeCommand::parse_from([
             "node",
             "--l1-eth-rpc",
-            "http://localhost:8545",
+            "http://custom:8545",
             "--l1-beacon",
-            "http://localhost:5052",
-        ])
-        .unwrap_err();
-        assert!(err.to_string().contains("--l2-engine-rpc"));
-    }
-
-    #[test]
-    fn test_node_cli_missing_l2_provider_rpc() {
-        let err = NodeCommand::try_parse_from([
-            "node",
-            "--l1-eth-rpc",
-            "http://localhost:8545",
-            "--l1-beacon",
-            "http://localhost:5052",
+            "http://custom:5052",
             "--l2-engine-rpc",
-            "http://localhost:8551",
-        ])
-        .unwrap_err();
-        assert!(err.to_string().contains("--l2-provider-rpc"));
+            "http://custom:8551",
+            "--l2-provider-rpc",
+            "http://custom:8545",
+        ]);
+        assert_eq!(args.l1_eth_rpc.as_str(), "http://custom:8545");
+        assert_eq!(args.l1_beacon.as_str(), "http://custom:5052");
+        assert_eq!(args.l2_engine_rpc.as_str(), "http://custom:8551");
+        assert_eq!(args.l2_provider_rpc.as_str(), "http://custom:8545");
     }
 }
