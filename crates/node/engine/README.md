@@ -98,7 +98,7 @@ The engine processes tasks through the following flow:
 
 Tasks implement sophisticated retry mechanisms:
 
-- **Temporary errors**: Task retries immediately in a loop until success or severity change
+- **Temporary errors**: Task is retried next time we're draining the task queue
 - **Critical errors**: Task fails immediately and error propagates to engine actor
 - **Reset/Flush errors**: Task fails and triggers engine-level recovery procedures
 
