@@ -55,7 +55,7 @@ The following CLI flags have default values and are optional:
 - `--l1-eth-rpc`: defaults to `http://localhost:8545`
 - `--l1-beacon`: defaults to `http://localhost:5052`
 - `--l2-engine-rpc`: defaults to `http://localhost:8551`
-- `--l2-provider-rpc`: defaults to `http://localhost:8545`
+- `--l2-provider-rpc`: defaults to `http://localhost:8546`
 
 For testing or development with local nodes, you can run the kona-node with just:
 
@@ -81,7 +81,7 @@ kona-node \
   --l1 $L1_PROVIDER_RPC \
   --l1-beacon $L1_BEACON_API \
   --l2 http://localhost:8551 \
-  --l2-provider-rpc http://localhost:8545 \
+  --l2-provider-rpc http://localhost:8546 \
   --l2-engine-jwt-secret ./jwt.hex \
   --port 5060 \
   --p2p.listen.tcp 9223 \
@@ -156,7 +156,7 @@ kona-node info --help
 
 - **L1 Execution Client**: Access to an Ethereum L1 execution client RPC endpoint (defaults to `http://localhost:8545`)
 - **L1 Beacon API**: Access to an Ethereum L1 beacon chain API endpoint (defaults to `http://localhost:5052`)
-- **L2 Execution Client**: Access to an OP Stack L2 execution client (e.g., op-reth) (engine defaults to `http://localhost:8551`, provider defaults to `http://localhost:8545`)
+- **L2 Execution Client**: Access to an OP Stack L2 execution client (e.g., op-reth) (engine defaults to `http://localhost:8551`, provider defaults to `http://localhost:8546`)
 - **JWT Secret**: A JWT secret file for authenticated communication with the L2 execution client
 
 ## Advanced Configuration

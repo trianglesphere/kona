@@ -72,7 +72,7 @@ pub struct NodeCommand {
         long,
         visible_alias = "l2.provider",
         env = "KONA_NODE_L2_ETH_RPC",
-        default_value = "http://localhost:8545"
+        default_value = "http://localhost:8546"
     )]
     pub l2_provider_rpc: Url,
     /// JWT secret for the auth-rpc endpoint of the execution client.
@@ -100,7 +100,7 @@ impl Default for NodeCommand {
             l1_eth_rpc: Url::parse("http://localhost:8545").unwrap(),
             l1_beacon: Url::parse("http://localhost:5052").unwrap(),
             l2_engine_rpc: Url::parse("http://localhost:8551").unwrap(),
-            l2_provider_rpc: Url::parse("http://localhost:8545").unwrap(),
+            l2_provider_rpc: Url::parse("http://localhost:8546").unwrap(),
             l2_engine_jwt_secret: None,
             l2_config_file: None,
             node_mode: NodeMode::Validator,
@@ -449,7 +449,7 @@ mod tests {
         assert_eq!(args.l1_eth_rpc.as_str(), "http://localhost:8545/");
         assert_eq!(args.l1_beacon.as_str(), "http://localhost:5052/");
         assert_eq!(args.l2_engine_rpc.as_str(), "http://localhost:8551/");
-        assert_eq!(args.l2_provider_rpc.as_str(), "http://localhost:8545/");
+        assert_eq!(args.l2_provider_rpc.as_str(), "http://localhost:8546/");
     }
 
     #[test]
@@ -463,12 +463,12 @@ mod tests {
             "--l2-engine-rpc",
             "http://custom:8551",
             "--l2-provider-rpc",
-            "http://custom:8545",
+            "http://custom:8546",
         ]);
         assert_eq!(args.l1_eth_rpc.as_str(), "http://custom:8545/");
         assert_eq!(args.l1_beacon.as_str(), "http://custom:5052/");
         assert_eq!(args.l2_engine_rpc.as_str(), "http://custom:8551/");
-        assert_eq!(args.l2_provider_rpc.as_str(), "http://custom:8545/");
+        assert_eq!(args.l2_provider_rpc.as_str(), "http://custom:8546/");
     }
 
     #[test]
@@ -479,7 +479,7 @@ mod tests {
         assert!(args.is_default_url(&args.l2_engine_rpc, "--l2-engine-rpc"));
         assert!(args.is_default_url(&args.l2_provider_rpc, "--l2-provider-rpc"));
 
-        let custom_url = Url::parse("http://custom:8545").unwrap();
+        let custom_url = Url::parse("http://custom:8546").unwrap();
         assert!(!args.is_default_url(&custom_url, "--l1-eth-rpc"));
     }
 }
