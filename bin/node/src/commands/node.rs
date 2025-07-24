@@ -14,10 +14,12 @@ use kona_node_service::{NodeMode, RollupNode, RollupNodeService};
 use kona_registry::scr_rollup_config_by_alloy_ident;
 use op_alloy_provider::ext::engine::OpEngineApi;
 use serde_json::from_reader;
-use std::{fs::File, path::PathBuf, sync::Arc};
+use std::{fs::File, path::PathBuf, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 use tracing::{debug, error, info};
 use url::Url;
+use alloy_provider::{Provider, ProviderBuilder};
+use alloy_transport::TransportError;
 
 /// The Node subcommand.
 ///
@@ -183,9 +185,130 @@ impl NodeCommand {
             .await
     }
 
+    /// Validate that all RPC endpoints are reachable by performing simple RPC calls.
+    /// This helps catch configuration issues early with helpful error messages.
+    pub async fn validate_rpc_endpoints(&self) -> anyhow::Result<()> {
+        // Validate L1 ETH RPC
+        if let Err(e) = self.validate_eth_rpc(&self.l1_eth_rpc, "L1 ETH RPC", "--l1-eth-rpc").await {
+            return Err(e);
+        }
+
+        // Validate L2 Provider RPC  
+        if let Err(e) = self.validate_eth_rpc(&self.l2_provider_rpc, "L2 Provider RPC", "--l2-provider-rpc").await {
+            return Err(e);
+        }
+
+        // Validate L2 Engine RPC
+        if let Err(e) = self.validate_eth_rpc(&self.l2_engine_rpc, "L2 Engine RPC", "--l2-engine-rpc").await {
+            return Err(e);
+        }
+
+        // Validate L1 Beacon API
+        if let Err(e) = self.validate_beacon_api(&self.l1_beacon, "L1 Beacon API", "--l1-beacon").await {
+            return Err(e);
+        }
+
+        Ok(())
+    }
+
+    /// Validate an ETH RPC endpoint by making a simple chain ID call.
+    async fn validate_eth_rpc(&self, url: &Url, name: &str, flag: &str) -> anyhow::Result<()> {
+        let provider = ProviderBuilder::new()
+            .connect_http(url.clone());
+
+        // Use a timeout for the RPC call
+        let call_result = tokio::time::timeout(
+            Duration::from_secs(10),
+            provider.get_chain_id()
+        ).await;
+
+        match call_result {
+            Ok(Ok(_)) => {
+                debug!("{} endpoint {} is reachable", name, url);
+                Ok(())
+            }
+            Ok(Err(transport_err)) => {
+                let is_default = self.is_default_url(url, flag);
+                self.format_rpc_error(name, url, flag, is_default, &transport_err.to_string())
+            }
+            Err(_) => {
+                let is_default = self.is_default_url(url, flag);
+                self.format_rpc_error(name, url, flag, is_default, "connection timeout after 10 seconds")
+            }
+        }
+    }
+
+    /// Validate a Beacon API endpoint by making a simple config call.
+    async fn validate_beacon_api(&self, url: &Url, name: &str, flag: &str) -> anyhow::Result<()> {
+        let client = reqwest::Client::new();
+        let endpoint = format!("{}/eth/v1/config/spec", url);
+        
+        let call_result = tokio::time::timeout(
+            Duration::from_secs(10),
+            client.get(&endpoint).send()
+        ).await;
+
+        match call_result {
+            Ok(Ok(response)) if response.status().is_success() => {
+                debug!("{} endpoint {} is reachable", name, url);
+                Ok(())
+            }
+            Ok(Ok(response)) => {
+                let is_default = self.is_default_url(url, flag);
+                let error_msg = format!("HTTP {} - {}", response.status(), response.status().canonical_reason().unwrap_or("Unknown"));
+                self.format_rpc_error(name, url, flag, is_default, &error_msg)
+            }
+            Ok(Err(req_err)) => {
+                let is_default = self.is_default_url(url, flag);
+                self.format_rpc_error(name, url, flag, is_default, &req_err.to_string())
+            }
+            Err(_) => {
+                let is_default = self.is_default_url(url, flag);
+                self.format_rpc_error(name, url, flag, is_default, "connection timeout after 10 seconds")
+            }
+        }
+    }
+
+    /// Check if the given URL matches the default for this flag.
+    fn is_default_url(&self, url: &Url, flag: &str) -> bool {
+        let default_cmd = NodeCommand::default();
+        match flag {
+            "--l1-eth-rpc" => url == &default_cmd.l1_eth_rpc,
+            "--l1-beacon" => url == &default_cmd.l1_beacon,
+            "--l2-engine-rpc" => url == &default_cmd.l2_engine_rpc,
+            "--l2-provider-rpc" => url == &default_cmd.l2_provider_rpc,
+            _ => false,
+        }
+    }
+
+    /// Format a helpful error message for RPC validation failures.
+    fn format_rpc_error(&self, name: &str, url: &Url, flag: &str, is_default: bool, error_msg: &str) -> anyhow::Result<()> {
+        let default_note = if is_default {
+            format!(" (using default value)")
+        } else {
+            String::new()
+        };
+
+        let error = format!(
+            "{} endpoint is unreachable or invalid: {}{}\n\
+             URL: {}\n\
+             Error: {}\n\
+             \n\
+             To fix this:\n\
+             - Ensure the service is running and accessible\n\
+             - Use {} to specify a different endpoint URL",
+            name, url, default_note, url, error_msg, flag
+        );
+
+        bail!("{}", error)
+    }
+
     /// Run the Node subcommand.
     pub async fn run(self, args: &GlobalArgs) -> anyhow::Result<()> {
         let cfg = self.get_l2_config(args)?;
+
+        // Validate all RPC endpoints early to provide helpful error messages
+        self.validate_rpc_endpoints().await?;
 
         // If metrics are enabled, initialize the global cli metrics.
         args.metrics.enabled.then(|| init_rollup_config_metrics(&cfg));
@@ -320,5 +443,17 @@ mod tests {
         assert_eq!(args.l1_beacon.as_str(), "http://custom:5052");
         assert_eq!(args.l2_engine_rpc.as_str(), "http://custom:8551");
         assert_eq!(args.l2_provider_rpc.as_str(), "http://custom:8545");
+    }
+
+    #[test]
+    fn test_is_default_url() {
+        let args = NodeCommand::default();
+        assert!(args.is_default_url(&args.l1_eth_rpc, "--l1-eth-rpc"));
+        assert!(args.is_default_url(&args.l1_beacon, "--l1-beacon"));
+        assert!(args.is_default_url(&args.l2_engine_rpc, "--l2-engine-rpc"));
+        assert!(args.is_default_url(&args.l2_provider_rpc, "--l2-provider-rpc"));
+        
+        let custom_url = Url::parse("http://custom:8545").unwrap();
+        assert!(!args.is_default_url(&custom_url, "--l1-eth-rpc"));
     }
 }
