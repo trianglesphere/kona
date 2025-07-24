@@ -15,7 +15,71 @@ use op_alloy_rpc_types_engine::{OpExecutionPayload, OpExecutionPayloadEnvelope};
 use std::{sync::Arc, time::Instant};
 use tokio::sync::mpsc;
 
-/// The [`BuildTask`] is responsible for building new blocks and importing them via the engine API.
+/// Task for building new blocks and importing them into the execution layer.
+///
+/// The [`BuildTask`] handles the complete lifecycle of block creation, from initiating
+/// the build process with payload attributes to importing the completed block into
+/// the execution engine. This task is essential for sequencer operations and block
+/// production in the rollup.
+///
+/// ## Block Building Workflow
+///
+/// ### 1. Forkchoice Update with Attributes
+/// - Send `engine_forkchoiceUpdated` with payload attributes to initiate building
+/// - Execution layer begins constructing block with specified parameters
+/// - Receive payload ID for tracking the build process
+///
+/// ### 2. Payload Retrieval
+/// - Wait for block construction to complete (may involve multiple attempts)
+/// - Call `engine_getPayload` to retrieve the built execution payload
+/// - Validate payload structure and content against provided attributes
+///
+/// ### 3. Payload Import
+/// - Execute `engine_newPayload` to import the block into execution layer
+/// - Update engine state to reflect new unsafe head
+/// - Optionally send completed payload through result channel
+///
+/// ### 4. Canonicalization
+/// - Perform forkchoice update to canonicalize the new block
+/// - Ensure execution layer recognizes block as current head
+/// - Update synchronization state appropriately
+///
+/// ## Attribute Types and Sources
+///
+/// ### Sequencer Attributes (`is_attributes_derived = false`)
+/// - **Source**: Directly provided by sequencer logic
+/// - **Validation**: Minimal, trusts sequencer to provide valid attributes
+/// - **Performance**: Optimized for low latency block production
+/// - **Error Handling**: Critical errors may indicate sequencer issues
+///
+/// ### Derived Attributes (`is_attributes_derived = true`)
+/// - **Source**: Derived from L1 batch data during consolidation
+/// - **Validation**: Extensive validation against L1 derivation rules
+/// - **Performance**: Higher latency acceptable for validation thoroughness
+/// - **Error Handling**: Validation failures may trigger consolidation fallback
+///
+/// ## Error Contexts and Recovery
+///
+/// ### Temporary Errors (Automatic Retry)
+/// - **Build Timeout**: Execution layer needs more time to complete block
+/// - **Resource Constraints**: Temporary memory/CPU limitations during building
+/// - **Network Issues**: RPC communication problems with execution layer
+///
+/// ### Critical Errors (Task Failure)
+/// - **Invalid Attributes**: Payload attributes violate consensus rules
+/// - **Build Failure**: Execution layer cannot construct valid block
+/// - **Import Rejection**: Built payload fails validation during import
+///
+/// ### Reset Errors (Engine Reset Required)
+/// - **Parent Unknown**: Attributes reference unknown parent block hash
+/// - **State Inconsistency**: Engine state incompatible with build request
+/// - **Fork Conflicts**: Build conflicts with current forkchoice state
+///
+/// ## Performance Characteristics
+/// - **Build Latency**: Depends on block complexity and EL implementation
+/// - **Memory Usage**: Payload data temporarily held in memory during processing
+/// - **Priority**: High priority task type, executes before consolidation/finalization
+/// - **Parallelization**: Cannot parallelize within single engine (sequential execution)
 #[derive(Debug, Clone)]
 pub struct BuildTask {
     /// The engine API client.

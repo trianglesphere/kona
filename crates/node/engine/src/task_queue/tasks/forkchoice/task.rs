@@ -12,8 +12,55 @@ use op_alloy_provider::ext::engine::OpEngineApi;
 use std::sync::Arc;
 use tokio::time::Instant;
 
-/// The [`ForkchoiceTask`] executes an `engine_forkchoiceUpdated` call with the current
-/// [`EngineState`]'s forkchoice, and no payload attributes.
+/// Task for executing `engine_forkchoiceUpdated` calls to synchronize the execution layer.
+///
+/// The [`ForkchoiceTask`] is responsible for maintaining synchronization between the rollup
+/// node's view of the canonical chain and the execution layer's internal state. This task
+/// is critical for ensuring that both systems agree on which blocks are considered canonical.
+///
+/// ## Purpose and Functionality
+///
+/// ### Primary Responsibilities
+/// 1. **Forkchoice Synchronization**: Update EL's view of head, safe, and finalized blocks
+/// 2. **State Management**: Apply sync state updates to engine state after successful calls
+/// 3. **Payload Building**: Optionally initiate block building with provided attributes
+/// 4. **Sync Status Tracking**: Monitor EL synchronization status and update flags
+///
+/// ### Engine API Integration
+/// The task calls `engine_forkchoiceUpdated` with:
+/// - **Forkchoice State**: Current head, safe, and finalized block hashes
+/// - **Payload Attributes**: Optional attributes for block building initiation
+/// - **Version Selection**: Automatic version selection based on timestamp and config
+///
+/// ## State Update Workflow
+///
+/// 1. **Pre-execution**: Validate current engine state and task parameters
+/// 2. **API Call**: Execute `engine_forkchoiceUpdated` with appropriate version
+/// 3. **Response Processing**: Analyze payload status and handle different outcomes
+/// 4. **State Application**: Apply sync state updates on successful completion
+/// 5. **Error Handling**: Classify errors by severity and determine retry strategy
+///
+/// ## Error Scenarios and Contexts
+///
+/// ### Temporary Errors (Retry Automatically)
+/// - **Network Issues**: RPC timeouts, connection failures
+/// - **EL Busy**: Execution layer temporarily processing other requests
+/// - **Sync Lag**: EL still catching up to current chain state
+///
+/// ### Critical Errors (Immediate Failure)
+/// - **Invalid Forkchoice**: Block hashes unknown to execution layer
+/// - **Consensus Violations**: Forkchoice violates chain validity rules
+/// - **Authentication Failures**: JWT token issues, permission denied
+///
+/// ### Reset Errors (Engine reset required)
+/// - **Irreconcilable States**: EL and rollup node have divergent chain views
+/// - **Missing Parent Blocks**: Forkchoice references unknown block lineage
+/// - **Deep Reorg Conflicts**: L1 reorg affects previously finalized state
+///
+/// ## Performance Considerations
+/// - **High Priority**: Forkchoice tasks execute before all other task types
+/// - **Synchronous Operation**: Must complete before dependent operations proceed
+/// - **State Consistency**: Ensures all components operate on consistent chain view
 #[derive(Debug, Clone)]
 pub struct ForkchoiceTask {
     /// The engine client.
