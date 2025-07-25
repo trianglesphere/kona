@@ -287,9 +287,9 @@ impl NodeCommand {
                 let error_msg = transport_err.to_string();
 
                 // If the error is about JWT/signature, the endpoint is reachable
-                if error_msg.contains("signature invalid")
-                    || error_msg.contains("unauthorized")
-                    || error_msg.contains("401")
+                if error_msg.contains("signature invalid") ||
+                    error_msg.contains("unauthorized") ||
+                    error_msg.contains("401")
                 {
                     debug!(
                         "{} endpoint {} is reachable (JWT authentication will be validated later)",
