@@ -11,12 +11,14 @@ use kona_protocol::BlockInfo;
 use lru::LruCache;
 use std::{boxed::Box, num::NonZeroUsize, vec::Vec};
 
+use crate::ConfirmationDelayedProvider;
+
 /// The [AlloyChainProvider] is a concrete implementation of the [ChainProvider] trait, providing
 /// data over Ethereum JSON-RPC using an alloy provider as the backend.
 #[derive(Debug, Clone)]
 pub struct AlloyChainProvider {
     /// The inner Ethereum JSON-RPC provider.
-    pub inner: RootProvider,
+    pub inner: ConfirmationDelayedProvider,
     /// `header_by_hash` LRU cache.
     header_by_hash_cache: LruCache<B256, Header>,
     /// `receipts_by_hash_cache` LRU cache.
@@ -30,7 +32,7 @@ impl AlloyChainProvider {
     ///
     /// ## Panics
     /// - Panics if `cache_size` is zero.
-    pub fn new(inner: RootProvider, cache_size: usize) -> Self {
+    pub fn new(inner: ConfirmationDelayedProvider, cache_size: usize) -> Self {
         Self {
             inner,
             header_by_hash_cache: LruCache::new(NonZeroUsize::new(cache_size).unwrap()),
@@ -43,7 +45,17 @@ impl AlloyChainProvider {
 
     /// Creates a new [AlloyChainProvider] from the provided [reqwest::Url].
     pub fn new_http(url: reqwest::Url, cache_size: usize) -> Self {
-        let inner = RootProvider::new_http(url);
+        let inner = ConfirmationDelayedProvider::new_http(url, 0); // No confirmation delay by default
+        Self::new(inner, cache_size)
+    }
+
+    /// Creates a new [AlloyChainProvider] from the provided [reqwest::Url] with confirmation delay.
+    pub fn new_http_with_confirmation_depth(
+        url: reqwest::Url,
+        cache_size: usize,
+        confirmation_depth: u64,
+    ) -> Self {
+        let inner = ConfirmationDelayedProvider::new_http(url, confirmation_depth);
         Self::new(inner, cache_size)
     }
 
@@ -102,6 +114,7 @@ impl ChainProvider for AlloyChainProvider {
 
         let block = self
             .inner
+            .inner()
             .get_block_by_hash(hash)
             .await?
             .ok_or(AlloyChainProviderError::BlockNotFound(hash.into()))?;
@@ -113,16 +126,21 @@ impl ChainProvider for AlloyChainProvider {
     }
 
     async fn block_info_by_number(&mut self, number: u64) -> Result<BlockInfo, Self::Error> {
+        // Apply confirmation delay to the block number
+        let delayed_number = self.inner.apply_confirmation_delay(number)
+            .ok_or_else(|| AlloyChainProviderError::BlockNotFound(number.into()))?;
+        
         let block = self
             .inner
-            .get_block_by_number(number.into())
+            .inner()
+            .get_block_by_number(delayed_number.into())
             .await?
-            .ok_or(AlloyChainProviderError::BlockNotFound(number.into()))?;
+            .ok_or(AlloyChainProviderError::BlockNotFound(delayed_number.into()))?;
         let header = block.header.into_consensus();
 
         let block_info = BlockInfo {
             hash: header.hash_slow(),
-            number,
+            number: delayed_number,
             parent_hash: header.parent_hash,
             timestamp: header.timestamp,
         };
@@ -136,6 +154,7 @@ impl ChainProvider for AlloyChainProvider {
 
         let receipts = self
             .inner
+            .inner()
             .get_block_receipts(hash.into())
             .await?
             .ok_or(AlloyChainProviderError::BlockNotFound(hash.into()))?;
@@ -160,6 +179,7 @@ impl ChainProvider for AlloyChainProvider {
 
         let block = self
             .inner
+            .inner()
             .get_block_by_hash(hash)
             .full()
             .await?

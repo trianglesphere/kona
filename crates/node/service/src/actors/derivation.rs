@@ -12,7 +12,7 @@ use kona_derive::{
 use kona_genesis::RollupConfig;
 use kona_protocol::{BlockInfo, L2BlockInfo, OpAttributesWithParent};
 use kona_providers_alloy::{
-    AlloyChainProvider, AlloyL2ChainProvider, OnlineBeaconClient, OnlineBlobProvider,
+    AlloyChainProvider, AlloyL2ChainProvider, ConfirmationDelayedProvider, OnlineBeaconClient, OnlineBlobProvider,
     OnlinePipeline,
 };
 use op_alloy_network::Optimism;
@@ -97,7 +97,7 @@ pub trait PipelineBuilder: Send + Sync + 'static {
 #[derive(Debug)]
 pub struct DerivationBuilder {
     /// The L1 provider.
-    pub l1_provider: RootProvider,
+    pub l1_provider: ConfirmationDelayedProvider,
     /// The L1 beacon client.
     pub l1_beacon: OnlineBeaconClient,
     /// The L2 provider.

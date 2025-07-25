@@ -129,7 +129,14 @@ impl RollupNodeBuilder {
     /// - The P2P config is not set.
     pub fn build(self) -> RollupNode {
         let l1_rpc_url = self.l1_provider_rpc_url.expect("l1 provider rpc url not set");
-        let l1_provider = RootProvider::new_http(l1_rpc_url.clone());
+        
+        // Determine confirmation depth based on mode
+        let l1_confs = match self.mode {
+            NodeMode::Sequencer => self.sequencer_l1_confs.unwrap_or(4),
+            _ => self.verifier_l1_confs.unwrap_or(4), // Verifier and Validator modes
+        };
+        
+        let l1_provider = ConfirmationDelayedProvider::new_http(l1_rpc_url.clone(), l1_confs);
         let l1_beacon = OnlineBeaconClient::new_http(
             self.l1_beacon_api_url.expect("l1 beacon api url not set").to_string(),
         );

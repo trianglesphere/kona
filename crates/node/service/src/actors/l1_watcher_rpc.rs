@@ -5,6 +5,7 @@ use crate::{NodeActor, actors::CancellableContext};
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_primitives::{Address, B256};
 use alloy_provider::{Provider, RootProvider};
+use kona_providers_alloy::ConfirmationDelayedProvider;
 use alloy_rpc_client::PollerBuilder;
 use alloy_rpc_types_eth::{Block, Log};
 use alloy_transport::TransportError;
@@ -41,7 +42,7 @@ pub struct L1WatcherRpcState {
     /// This is used to determine if the L1 watcher should check for unsafe block signer updates.
     pub rollup: Arc<RollupConfig>,
     /// The L1 provider.
-    pub l1_provider: RootProvider,
+    pub l1_provider: ConfirmationDelayedProvider,
 }
 
 impl L1WatcherRpcState {
@@ -49,6 +50,7 @@ impl L1WatcherRpcState {
     async fn fetch_logs(&self, block_hash: B256) -> Result<Vec<Log>, L1WatcherRpcError<BlockInfo>> {
         let logs = self
             .l1_provider
+            .inner()
             .get_logs(&alloy_rpc_types_eth::Filter::new().select(block_hash))
             .await?;
 
@@ -63,7 +65,7 @@ impl L1WatcherRpcState {
     ) -> JoinHandle<()> {
         // Start the inbound query processor in a separate task to avoid blocking the main task.
         // We can cheaply clone the l1 provider here because it is an Arc.
-        let l1_provider = self.l1_provider.clone();
+        let l1_provider = self.l1_provider.inner().clone();
         let rollup_config = self.rollup.clone();
 
         tokio::spawn(async move {
@@ -246,14 +248,14 @@ impl NodeActor for L1WatcherRpc {
     }
 }
 
-/// A wrapper around a [`PollerBuilder`] that observes [`BlockId`] updates on a [`RootProvider`].
+/// A wrapper around a [`PollerBuilder`] that observes [`BlockId`] updates on a [`ConfirmationDelayedProvider`].
 ///
 /// Note that this stream is not guaranteed to be contiguous. It may miss certain blocks, and
 /// yielded items should only be considered to be the latest block matching the given
 /// [`BlockNumberOrTag`].
 struct BlockStream<'a> {
-    /// The inner [`RootProvider`].
-    l1_provider: &'a RootProvider,
+    /// The inner [`ConfirmationDelayedProvider`].
+    l1_provider: &'a ConfirmationDelayedProvider,
     /// The block tag to poll for.
     tag: BlockNumberOrTag,
     /// The poll interval (in seconds).
@@ -265,7 +267,7 @@ impl<'a> BlockStream<'a> {
     ///
     /// ## Panics
     /// Panics if the passed [`BlockNumberOrTag`] is of the [`BlockNumberOrTag::Number`] variant.
-    fn new(l1_provider: &'a RootProvider, tag: BlockNumberOrTag, poll_interval: Duration) -> Self {
+    fn new(l1_provider: &'a ConfirmationDelayedProvider, tag: BlockNumberOrTag, poll_interval: Duration) -> Self {
         if matches!(tag, BlockNumberOrTag::Number(_)) {
             panic!("Invalid BlockNumberOrTag variant - Must be a tag");
         }
@@ -275,7 +277,7 @@ impl<'a> BlockStream<'a> {
     /// Transforms the watcher into a [`Stream`].
     fn into_stream(self) -> impl Stream<Item = BlockInfo> + Unpin {
         let mut poll_stream = PollerBuilder::<_, Block>::new(
-            self.l1_provider.weak_client(),
+            self.l1_provider.inner().weak_client(),
             "eth_getBlockByNumber",
             (self.tag, false),
         )

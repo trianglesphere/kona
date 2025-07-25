@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use kona_derive::{AttributesBuilder, PipelineErrorKind, StatefulAttributesBuilder};
 use kona_genesis::RollupConfig;
 use kona_protocol::{BlockInfo, L2BlockInfo, OpAttributesWithParent};
-use kona_providers_alloy::{AlloyChainProvider, AlloyL2ChainProvider};
+use kona_providers_alloy::{AlloyChainProvider, AlloyL2ChainProvider, ConfirmationDelayedProvider};
 use kona_rpc::SequencerAdminQuery;
 use op_alloy_network::Optimism;
 use op_alloy_rpc_types_engine::OpExecutionPayloadEnvelope;
@@ -42,7 +42,7 @@ pub(super) struct SequencerActorState<AB: AttributesBuilder> {
     /// The [`AttributesBuilder`].
     pub builder: AB,
     /// The [`L1OriginSelector`].
-    pub origin_selector: L1OriginSelector<RootProvider>,
+    pub origin_selector: L1OriginSelector<ConfirmationDelayedProvider>,
     /// The conductor RPC client.
     pub conductor: Option<ConductorClient>,
     /// Whether the sequencer is active. This is used inside communications between the sequencer
@@ -103,7 +103,7 @@ pub struct SequencerBuilder {
     /// The [`RollupConfig`] for the chain being sequenced.
     pub rollup_cfg: Arc<RollupConfig>,
     /// The L1 provider.
-    pub l1_provider: RootProvider,
+    pub l1_provider: ConfirmationDelayedProvider,
     /// The L2 provider.
     pub l2_provider: RootProvider<Optimism>,
 }

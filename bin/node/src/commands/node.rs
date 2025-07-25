@@ -219,6 +219,8 @@ impl NodeCommand {
             .with_p2p_config(p2p_config)
             .with_rpc_config(rpc_config)
             .with_sequencer_config(self.sequencer_flags.config())
+            .with_verifier_l1_confs(self.verifier_flags.l1_confs)
+            .with_sequencer_l1_confs(self.sequencer_flags.l1_confs)
             .build()
             .start()
             .await

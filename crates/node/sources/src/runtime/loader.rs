@@ -77,7 +77,7 @@ impl RuntimeLoader {
         // Check if the runtime config is already cached.
         if let Some(config) = self.cache.get(&block_info) {
             // Only use the cached config if the block hash matches.
-            let block = self.provider.inner.get_block(block_info.hash.into()).await?;
+            let block = self.provider.inner.inner().get_block(block_info.hash.into()).await?;
             if block.is_some_and(|block| block.header.hash == block_info.hash) {
                 debug!(target: "runtime_loader", "Using cached runtime config");
                 return Ok(*config);
@@ -88,6 +88,7 @@ impl RuntimeLoader {
         let unsafe_block_signer_address = self
             .provider
             .inner
+            .inner()
             .get_storage_at(
                 self.config.l1_system_config_address,
                 UNSAFE_BLOCK_SIGNER_ADDRESS_STORAGE_SLOT.into(),
@@ -110,6 +111,7 @@ impl RuntimeLoader {
             let required = self
                 .provider
                 .inner
+                .inner()
                 .get_storage_at(
                     self.config.protocol_versions_address,
                     REQUIRED_PROTOCOL_VERSION_STORAGE_SLOT.into(),
@@ -122,6 +124,7 @@ impl RuntimeLoader {
             let recommended = self
                 .provider
                 .inner
+                .inner()
                 .get_storage_at(
                     self.config.protocol_versions_address,
                     RECOMMENDED_PROTOCOL_VERSION_STORAGE_SLOT.into(),

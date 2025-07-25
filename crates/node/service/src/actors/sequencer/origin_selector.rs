@@ -6,6 +6,7 @@ use alloy_transport::{RpcError, TransportErrorKind};
 use async_trait::async_trait;
 use kona_genesis::RollupConfig;
 use kona_protocol::{BlockInfo, L2BlockInfo};
+use kona_providers_alloy::ConfirmationDelayedProvider;
 use std::sync::Arc;
 
 /// The [`L1OriginSelector`] is responsible for selecting the L1 origin block based on the
@@ -183,6 +184,30 @@ impl L1OriginSelectorProvider for RootProvider {
         number: u64,
     ) -> Result<Option<BlockInfo>, L1OriginSelectorError> {
         Ok(Provider::get_block_by_number(self, number.into()).await?.map(Into::into))
+    }
+}
+
+#[async_trait]
+impl L1OriginSelectorProvider for ConfirmationDelayedProvider {
+    async fn get_block_by_hash(
+        &self,
+        hash: B256,
+    ) -> Result<Option<BlockInfo>, L1OriginSelectorError> {
+        // Hash-based requests don't need confirmation delay
+        Ok(Provider::get_block_by_hash(self.inner(), hash).await?.map(Into::into))
+    }
+
+    async fn get_block_by_number(
+        &self,
+        number: u64,
+    ) -> Result<Option<BlockInfo>, L1OriginSelectorError> {
+        // Apply confirmation delay to block number requests
+        if let Some(delayed_number) = self.apply_confirmation_delay(number) {
+            Ok(Provider::get_block_by_number(self.inner(), delayed_number.into()).await?.map(Into::into))
+        } else {
+            // Block number is within confirmation depth
+            Ok(None)
+        }
     }
 }
 
