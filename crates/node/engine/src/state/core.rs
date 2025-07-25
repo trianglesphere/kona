@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 ///    - Derived from finalized L1 data  
 ///    - Only has finalized L1 dependencies
 ///    - Cannot be reverted under normal conditions
-///    - Updates every ~12 minutes with L1 finalization
+///    - Updates every ~12 minutes with L1 finalization (Ethereum Mainnet; timing varies by L1 DA provider)
 ///
 /// 2. **Safe Head** (High Safety)
 ///    - Derived from L1 and cross-verified
