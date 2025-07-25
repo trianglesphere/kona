@@ -3,6 +3,7 @@
 use crate::Metrics;
 use alloy_rpc_types_engine::ForkchoiceState;
 use kona_protocol::L2BlockInfo;
+use serde::{Deserialize, Serialize};
 
 /// Synchronization state tracking different blockchain head pointers for an OP Stack rollup.
 ///
@@ -245,7 +246,7 @@ impl EngineSyncState {
 /// - **Accidental Overwrites**: Must explicitly specify each update
 /// - **Default Value Issues**: No risk of using uninitialized values
 /// - **Partial Update Bugs**: Clear distinction between "update" and "keep current"
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EngineSyncStateUpdate {
     /// Most recent block found on the p2p network
     pub unsafe_head: Option<L2BlockInfo>,

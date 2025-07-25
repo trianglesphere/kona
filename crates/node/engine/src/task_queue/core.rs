@@ -66,6 +66,8 @@ pub struct Engine {
     state: EngineState,
     /// A sender that can be used to notify the engine actor of state changes.
     state_sender: Sender<EngineState>,
+    /// A sender that can be used to notify the engine actor of task queue length changes.
+    task_queue_length: Sender<usize>,
     /// The task queue.
     tasks: BinaryHeap<EngineTask>,
 }
@@ -76,17 +78,27 @@ impl Engine {
     /// The engine is initialized with:
     /// - Empty priority queue for task execution
     /// - Watch channel sender for broadcasting state updates
+    /// - Watch channel sender for broadcasting task queue length updates
     /// - Initial state representing current blockchain synchronization status
     ///
     /// ## Parameters
     /// - `initial_state`: Starting engine state with sync head information
     /// - `state_sender`: Watch channel sender for broadcasting state changes to subscribers
+    /// - `task_queue_length`: Watch channel sender for broadcasting queue length changes
     ///
     /// ## State Broadcasting
     /// State changes are automatically broadcast to all subscribers when tasks complete
     /// successfully, enabling external coordination with other rollup node components.
-    pub fn new(initial_state: EngineState, state_sender: Sender<EngineState>) -> Self {
-        Self { state: initial_state, state_sender, tasks: BinaryHeap::default() }
+    /// Queue length changes are also broadcast to enable monitoring of engine load.
+    ///
+    /// An initial [`EngineTask::ForkchoiceUpdate`] is added to the task queue to synchronize the
+    /// engine with the forkchoice state of the [`EngineState`].
+    pub fn new(
+        initial_state: EngineState,
+        state_sender: Sender<EngineState>,
+        task_queue_length: Sender<usize>,
+    ) -> Self {
+        Self { state: initial_state, state_sender, task_queue_length, tasks: BinaryHeap::default() }
     }
 
     /// Returns a reference to the inner [`EngineState`].
@@ -104,14 +116,19 @@ impl Engine {
     ///
     /// ## Usage
     /// ```ignore
-    /// let mut state_updates = engine.subscribe();
+    /// let mut state_updates = engine.state_subscribe();
     /// while state_updates.changed().await.is_ok() {
     ///     let current_state = *state_updates.borrow();
     ///     // React to state changes
     /// }
     /// ```
-    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<EngineState> {
+    pub fn state_subscribe(&self) -> tokio::sync::watch::Receiver<EngineState> {
         self.state_sender.subscribe()
+    }
+
+    /// Returns a receiver that can be used to listen to engine queue length updates.
+    pub fn queue_length_subscribe(&self) -> tokio::sync::watch::Receiver<usize> {
+        self.task_queue_length.subscribe()
     }
 
     /// Enqueues a new [`EngineTask`] for execution in the priority queue.
@@ -130,8 +147,11 @@ impl Engine {
     /// - Tasks of the same type are processed in FIFO order
     /// - Higher priority tasks always execute before lower priority ones
     /// - Task execution is atomic with exclusive state access
+    /// 
+    /// Updates the queue length and notifies listeners of the change.
     pub fn enqueue(&mut self, task: EngineTask) {
         self.tasks.push(task);
+        self.task_queue_length.send_replace(self.tasks.len());
     }
 
     /// Resets the engine by finding a plausible sync starting point and clearing all pending tasks.
@@ -311,6 +331,8 @@ impl Engine {
 
             // Pop the task from the queue now that it's been executed.
             self.tasks.pop();
+
+            self.task_queue_length.send_replace(self.tasks.len());
         }
 
         Ok(())
