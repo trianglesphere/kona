@@ -214,8 +214,8 @@ impl NodeCommand {
         self.validate_eth_rpc(&self.l2_provider_rpc, "L2 Provider RPC", "--l2-provider-rpc")
             .await?;
 
-        // Validate L2 Engine RPC
-        self.validate_eth_rpc(&self.l2_engine_rpc, "L2 Engine RPC", "--l2-engine-rpc").await?;
+        // Validate L2 Engine RPC using Engine API
+        self.validate_engine_rpc(&self.l2_engine_rpc, "L2 Engine RPC", "--l2-engine-rpc").await?;
 
         // Validate L1 Beacon API
         self.validate_beacon_api(&self.l1_beacon, "L1 Beacon API", "--l1-beacon").await?;
@@ -239,6 +239,61 @@ impl NodeCommand {
             Ok(Err(transport_err)) => {
                 let is_default = self.is_default_url(url, flag);
                 self.format_rpc_error(name, url, flag, is_default, &transport_err.to_string())
+            }
+            Err(_) => {
+                let is_default = self.is_default_url(url, flag);
+                self.format_rpc_error(
+                    name,
+                    url,
+                    flag,
+                    is_default,
+                    "connection timeout after 10 seconds",
+                )
+            }
+        }
+    }
+
+    /// Validate an Engine API endpoint by making a simple exchange capabilities call.
+    /// Uses a dummy JWT to distinguish between unreachable endpoints vs authentication issues.
+    async fn validate_engine_rpc(&self, url: &Url, name: &str, flag: &str) -> anyhow::Result<()> {
+        // Create a dummy JWT secret for validation purposes
+        let dummy_jwt = JwtSecret::random();
+        
+        // Create a minimal rollup config for the engine client
+        // We only need this for the client construction, not for actual operation
+        let dummy_config = Arc::new(RollupConfig::default());
+        
+        let engine_client = kona_engine::EngineClient::new_http(
+            url.clone(),
+            url.clone(), // Use same URL for l2_provider as we're only testing engine endpoint
+            url.clone(), // Use same URL for l1_provider as we're only testing engine endpoint  
+            dummy_config,
+            dummy_jwt,
+        );
+
+        // Use a timeout for the RPC call
+        let call_result = tokio::time::timeout(
+            Duration::from_secs(10), 
+            engine_client.exchange_capabilities(vec![])
+        ).await;
+
+        match call_result {
+            Ok(Ok(_)) => {
+                debug!("{} endpoint {} is reachable", name, url);
+                Ok(())
+            }
+            Ok(Err(transport_err)) => {
+                let error_msg = transport_err.to_string();
+                
+                // If the error is about JWT/signature, the endpoint is reachable
+                if error_msg.contains("signature invalid") || error_msg.contains("unauthorized") || error_msg.contains("401") {
+                    debug!("{} endpoint {} is reachable (JWT authentication will be validated later)", name, url);
+                    Ok(())
+                } else {
+                    // Other errors indicate the endpoint is unreachable
+                    let is_default = self.is_default_url(url, flag);
+                    self.format_rpc_error(name, url, flag, is_default, &error_msg)
+                }
             }
             Err(_) => {
                 let is_default = self.is_default_url(url, flag);
