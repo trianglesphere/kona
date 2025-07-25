@@ -7,7 +7,6 @@ use crate::{
 use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_engine::JwtSecret;
 use anyhow::{Result, bail};
-use backon::{ExponentialBuilder, Retryable};
 use clap::Parser;
 use kona_cli::{LogConfig, metrics_args::MetricsArgs};
 use kona_genesis::RollupConfig;
@@ -255,9 +254,9 @@ impl NodeCommand {
                 let error_msg = transport_err.to_string();
 
                 // If the error is about JWT/signature, provide specific guidance
-                if error_msg.contains("signature invalid")
-                    || error_msg.contains("unauthorized")
-                    || error_msg.contains("401")
+                if error_msg.contains("signature invalid") ||
+                    error_msg.contains("unauthorized") ||
+                    error_msg.contains("401")
                 {
                     let is_default = self.is_default_url(url, flag);
                     let auth_error = format!(

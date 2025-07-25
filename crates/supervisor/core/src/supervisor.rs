@@ -484,8 +484,8 @@ impl SupervisorService for Supervisor {
             // initiating chains at the respective timestamps.
             let rollup_config = &self.config.rollup_config_set;
             if !rollup_config
-                .is_interop_enabled(initiating_chain_id, executing_descriptor.timestamp)
-                || !rollup_config.is_interop_enabled(executing_chain_id, access.timestamp)
+                .is_interop_enabled(initiating_chain_id, executing_descriptor.timestamp) ||
+                !rollup_config.is_interop_enabled(executing_chain_id, access.timestamp)
             {
                 return Err(SupervisorError::InteropNotEnabled);
             }

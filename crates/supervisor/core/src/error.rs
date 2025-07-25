@@ -98,18 +98,16 @@ impl From<SupervisorError> for ErrorObjectOwned {
     fn from(err: SupervisorError) -> Self {
         match err {
             // todo: handle these errors more gracefully
-            SupervisorError::Unimplemented
-            | SupervisorError::EmptyDependencySet
-            | SupervisorError::InteropNotEnabled
-            | SupervisorError::L1BlockMismatch { .. }
-            | SupervisorError::Initialise(_)
-            | SupervisorError::ManagedNodeError(_)
-            | SupervisorError::ChainProcessorError(_)
-            | SupervisorError::CrossSafetyCheckerError(_)
-            | SupervisorError::StorageError(_)
-            | SupervisorError::AccessListError(_) => {
-                ErrorObjectOwned::from(ErrorCode::InternalError)
-            }
+            SupervisorError::Unimplemented |
+            SupervisorError::EmptyDependencySet |
+            SupervisorError::InteropNotEnabled |
+            SupervisorError::L1BlockMismatch { .. } |
+            SupervisorError::Initialise(_) |
+            SupervisorError::ManagedNodeError(_) |
+            SupervisorError::ChainProcessorError(_) |
+            SupervisorError::CrossSafetyCheckerError(_) |
+            SupervisorError::StorageError(_) |
+            SupervisorError::AccessListError(_) => ErrorObjectOwned::from(ErrorCode::InternalError),
             SupervisorError::SpecError(err) => err.into(),
         }
     }
