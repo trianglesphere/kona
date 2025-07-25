@@ -16,7 +16,7 @@ use tower::ServiceBuilder;
 use url::Url;
 
 use kona_genesis::RollupConfig;
-use kona_providers_alloy::OnlineBeaconClient;
+use kona_providers_alloy::{ConfirmationDelayedProvider, OnlineBeaconClient};
 use kona_rpc::RpcBuilder;
 
 /// The [`RollupNodeBuilder`] is used to construct a [`RollupNode`] service.
@@ -44,6 +44,10 @@ pub struct RollupNodeBuilder {
     mode: NodeMode,
     /// Whether to run the node in interop mode.
     interop_mode: InteropMode,
+    /// L1 confirmation depth for the verifier mode.
+    verifier_l1_confs: Option<u64>,
+    /// L1 confirmation depth for the sequencer mode.
+    sequencer_l1_confs: Option<u64>,
 }
 
 impl RollupNodeBuilder {
@@ -100,6 +104,16 @@ impl RollupNodeBuilder {
     /// Appends the [`SequencerConfig`] to the builder.
     pub fn with_sequencer_config(self, sequencer_config: SequencerConfig) -> Self {
         Self { sequencer_config: Some(sequencer_config), ..self }
+    }
+
+    /// Sets the L1 confirmation depth for verifier mode.
+    pub fn with_verifier_l1_confs(self, verifier_l1_confs: u64) -> Self {
+        Self { verifier_l1_confs: Some(verifier_l1_confs), ..self }
+    }
+
+    /// Sets the L1 confirmation depth for sequencer mode.
+    pub fn with_sequencer_l1_confs(self, sequencer_l1_confs: u64) -> Self {
+        Self { sequencer_l1_confs: Some(sequencer_l1_confs), ..self }
     }
 
     /// Assembles the [`RollupNode`] service.

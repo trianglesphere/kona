@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use kona_genesis::RollupConfig;
 use kona_providers_alloy::{
-    AlloyChainProvider, AlloyL2ChainProvider, OnlineBeaconClient, OnlinePipeline,
+    AlloyChainProvider, AlloyL2ChainProvider, ConfirmationDelayedProvider, OnlineBeaconClient, OnlinePipeline,
 };
 use kona_rpc::RpcBuilder;
 
@@ -26,7 +26,7 @@ pub struct RollupNode {
     /// The interop mode for the node.
     pub(crate) interop_mode: InteropMode,
     /// The L1 EL provider.
-    pub(crate) l1_provider: RootProvider,
+    pub(crate) l1_provider: ConfirmationDelayedProvider,
     /// The L1 beacon API.
     pub(crate) l1_beacon: OnlineBeaconClient,
     /// The L2 EL provider.
