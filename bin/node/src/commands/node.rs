@@ -162,46 +162,12 @@ impl NodeCommand {
         Ok(())
     }
 
-    /// Validate the jwt secret if specified by exchanging capabilities with the engine.
-    /// Since the engine client will fail if the jwt token is invalid, this allows to ensure
-    /// that the jwt token passed as a cli arg is correct.
-    pub async fn validate_jwt(&self, config: &RollupConfig) -> anyhow::Result<JwtSecret> {
-        let jwt_secret = self.jwt_secret().ok_or(anyhow::anyhow!("Invalid JWT secret"))?;
-        let engine_client = kona_engine::EngineClient::new_http(
-            self.l2_engine_rpc.clone(),
-            self.l2_provider_rpc.clone(),
-            self.l1_eth_rpc.clone(),
-            Arc::new(config.clone()),
-            jwt_secret,
-        );
-
-        let exchange = || async {
-            match engine_client.exchange_capabilities(vec![]).await {
-                Ok(_) => {
-                    debug!("Successfully exchanged capabilities with engine");
-                    Ok(jwt_secret)
-                }
-                Err(e) => {
-                    if e.to_string().contains("signature invalid") {
-                        error!(
-                            "Engine API JWT secret differs from the one specified by --l2.jwt-secret"
-                        );
-                        error!(
-                            "Ensure that the JWT secret file specified is correct (by default it is `jwt.hex` in the current directory)"
-                        );
-                    }
-                    bail!("Failed to exchange capabilities with engine: {}", e);
-                }
-            }
-        };
-
-        exchange
-            .retry(ExponentialBuilder::default())
-            .when(|e| !e.to_string().contains("signature invalid"))
-            .notify(|_, duration| {
-                debug!("Retrying engine capability handshake after {duration:?}");
-            })
-            .await
+    /// Get the JWT secret for the engine API.
+    /// JWT validation is now performed as part of RPC endpoint validation.
+    pub async fn validate_jwt(&self, _config: &RollupConfig) -> anyhow::Result<JwtSecret> {
+        self.jwt_secret().ok_or_else(|| {
+            anyhow::anyhow!("No JWT secret available. Please provide a JWT secret file using --l2-engine-jwt-secret or ensure jwt.hex exists in the current directory.")
+        })
     }
 
     /// Validate that all RPC endpoints are reachable by performing simple RPC calls.
@@ -254,10 +220,12 @@ impl NodeCommand {
     }
 
     /// Validate an Engine API endpoint by making a simple exchange capabilities call.
-    /// Uses a dummy JWT to distinguish between unreachable endpoints vs authentication issues.
+    /// Uses the actual JWT token to properly validate the engine endpoint.
     async fn validate_engine_rpc(&self, url: &Url, name: &str, flag: &str) -> anyhow::Result<()> {
-        // Create a dummy JWT secret for validation purposes
-        let dummy_jwt = JwtSecret::random();
+        // Get the actual JWT secret that will be used for the engine connection
+        let jwt_secret = self.jwt_secret().ok_or_else(|| {
+            anyhow::anyhow!("No JWT secret available for Engine API validation. Please provide a JWT secret file using --l2-engine-jwt-secret or ensure jwt.hex exists in the current directory.")
+        })?;
 
         // Create a minimal rollup config for the engine client
         // We only need this for the client construction, not for actual operation
@@ -268,7 +236,7 @@ impl NodeCommand {
             url.clone(), // Use same URL for l2_provider as we're only testing engine endpoint
             url.clone(), // Use same URL for l1_provider as we're only testing engine endpoint
             dummy_config,
-            dummy_jwt,
+            jwt_secret,
         );
 
         // Use a timeout for the RPC call
@@ -280,22 +248,34 @@ impl NodeCommand {
 
         match call_result {
             Ok(Ok(_)) => {
-                debug!("{} endpoint {} is reachable", name, url);
+                debug!("{} endpoint {} is reachable and JWT authentication is valid", name, url);
                 Ok(())
             }
             Ok(Err(transport_err)) => {
                 let error_msg = transport_err.to_string();
 
-                // If the error is about JWT/signature, the endpoint is reachable
-                if error_msg.contains("signature invalid") ||
-                    error_msg.contains("unauthorized") ||
-                    error_msg.contains("401")
+                // If the error is about JWT/signature, provide specific guidance
+                if error_msg.contains("signature invalid")
+                    || error_msg.contains("unauthorized")
+                    || error_msg.contains("401")
                 {
-                    debug!(
-                        "{} endpoint {} is reachable (JWT authentication will be validated later)",
-                        name, url
+                    let is_default = self.is_default_url(url, flag);
+                    let auth_error = format!(
+                        "{} endpoint is reachable but JWT authentication failed: {}{}\n\
+                         URL: {}\n\
+                         Error: {}\n\
+                         \n\
+                         To fix this:\n\
+                         - Ensure the JWT secret file contains the correct token for the engine\n\
+                         - Use --l2-engine-jwt-secret to specify the correct JWT secret file\n\
+                         - Verify the engine is configured with the same JWT secret",
+                        name,
+                        url,
+                        if is_default { " (using default value)" } else { "" },
+                        url,
+                        error_msg
                     );
-                    Ok(())
+                    bail!("{}", auth_error)
                 } else {
                     // Other errors indicate the endpoint is unreachable
                     let is_default = self.is_default_url(url, flag);
