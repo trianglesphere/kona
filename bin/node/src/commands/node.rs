@@ -258,24 +258,25 @@ impl NodeCommand {
     async fn validate_engine_rpc(&self, url: &Url, name: &str, flag: &str) -> anyhow::Result<()> {
         // Create a dummy JWT secret for validation purposes
         let dummy_jwt = JwtSecret::random();
-        
+
         // Create a minimal rollup config for the engine client
         // We only need this for the client construction, not for actual operation
         let dummy_config = Arc::new(RollupConfig::default());
-        
+
         let engine_client = kona_engine::EngineClient::new_http(
             url.clone(),
             url.clone(), // Use same URL for l2_provider as we're only testing engine endpoint
-            url.clone(), // Use same URL for l1_provider as we're only testing engine endpoint  
+            url.clone(), // Use same URL for l1_provider as we're only testing engine endpoint
             dummy_config,
             dummy_jwt,
         );
 
         // Use a timeout for the RPC call
         let call_result = tokio::time::timeout(
-            Duration::from_secs(10), 
-            engine_client.exchange_capabilities(vec![])
-        ).await;
+            Duration::from_secs(10),
+            engine_client.exchange_capabilities(vec![]),
+        )
+        .await;
 
         match call_result {
             Ok(Ok(_)) => {
@@ -284,10 +285,16 @@ impl NodeCommand {
             }
             Ok(Err(transport_err)) => {
                 let error_msg = transport_err.to_string();
-                
+
                 // If the error is about JWT/signature, the endpoint is reachable
-                if error_msg.contains("signature invalid") || error_msg.contains("unauthorized") || error_msg.contains("401") {
-                    debug!("{} endpoint {} is reachable (JWT authentication will be validated later)", name, url);
+                if error_msg.contains("signature invalid")
+                    || error_msg.contains("unauthorized")
+                    || error_msg.contains("401")
+                {
+                    debug!(
+                        "{} endpoint {} is reachable (JWT authentication will be validated later)",
+                        name, url
+                    );
                     Ok(())
                 } else {
                     // Other errors indicate the endpoint is unreachable
