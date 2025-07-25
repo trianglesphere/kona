@@ -3,7 +3,7 @@
 use alloy_consensus::{Header, Receipt, TxEnvelope};
 use alloy_eips::BlockId;
 use alloy_primitives::B256;
-use alloy_provider::{Provider, RootProvider};
+use alloy_provider::Provider;
 use alloy_transport::{RpcError, TransportErrorKind};
 use async_trait::async_trait;
 use kona_derive::{ChainProvider, PipelineError, PipelineErrorKind};

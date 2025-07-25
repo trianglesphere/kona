@@ -336,17 +336,41 @@ mod tests {
     }
 
     #[test]
-    fn test_node_cli_missing_l2_provider_rpc() {
-        let err = NodeCommand::try_parse_from([
+    fn test_verifier_l1_confs_flag() {
+        let args = NodeCommand::try_parse_from([
             "node",
-            "--l1-eth-rpc",
-            "http://localhost:8545",
-            "--l1-beacon",
-            "http://localhost:5052",
-            "--l2-engine-rpc",
-            "http://localhost:8551",
-        ])
-        .unwrap_err();
-        assert!(err.to_string().contains("--l2-provider-rpc"));
+            "--verifier.l1-confs", "8",
+            "--l1-eth-rpc", "http://localhost:8545",
+            "--l1-beacon", "http://localhost:5052", 
+            "--l2-engine-rpc", "http://localhost:8551",
+            "--l2-provider-rpc", "http://localhost:8545",
+        ]).unwrap();
+        assert_eq!(args.verifier_flags.l1_confs, 8);
+    }
+
+    #[test]
+    fn test_sequencer_l1_confs_flag() {
+        let args = NodeCommand::try_parse_from([
+            "node",
+            "--sequencer.l1-confs", "6",
+            "--l1-eth-rpc", "http://localhost:8545",
+            "--l1-beacon", "http://localhost:5052",
+            "--l2-engine-rpc", "http://localhost:8551", 
+            "--l2-provider-rpc", "http://localhost:8545",
+        ]).unwrap();
+        assert_eq!(args.sequencer_flags.l1_confs, 6);
+    }
+
+    #[test]
+    fn test_default_confirmation_depths() {
+        let args = NodeCommand::try_parse_from([
+            "node",
+            "--l1-eth-rpc", "http://localhost:8545",
+            "--l1-beacon", "http://localhost:5052",
+            "--l2-engine-rpc", "http://localhost:8551",
+            "--l2-provider-rpc", "http://localhost:8545",
+        ]).unwrap();
+        assert_eq!(args.verifier_flags.l1_confs, 4); // default
+        assert_eq!(args.sequencer_flags.l1_confs, 4); // default
     }
 }

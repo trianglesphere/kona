@@ -4,7 +4,7 @@
 use crate::{NodeActor, actors::CancellableContext};
 use alloy_eips::{BlockId, BlockNumberOrTag};
 use alloy_primitives::{Address, B256};
-use alloy_provider::{Provider, RootProvider};
+use alloy_provider::Provider;
 use kona_providers_alloy::ConfirmationDelayedProvider;
 use alloy_rpc_client::PollerBuilder;
 use alloy_rpc_types_eth::{Block, Log};
