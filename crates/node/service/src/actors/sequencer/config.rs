@@ -15,4 +15,6 @@ pub struct SequencerConfig {
     pub sequencer_recovery_mode: bool,
     /// The [`Url`] for the conductor RPC endpoint. If [`Some`], enables the conductor service.
     pub conductor_rpc_url: Option<Url>,
+    /// Number of L1 confirmations required for the sequencer's L1 origin selection.
+    pub l1_confirmations: u64,
 }

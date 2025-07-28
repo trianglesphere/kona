@@ -1,6 +1,9 @@
 //! Contains the builder for the [`RollupNode`].
 
-use crate::{EngineBuilder, InteropMode, NetworkConfig, NodeMode, RollupNode, SequencerConfig};
+use crate::{
+    EngineBuilder, InteropMode, NetworkConfig, NodeMode, RollupNode, SequencerConfig,
+    VerifierConfig,
+};
 use alloy_primitives::Bytes;
 use alloy_provider::RootProvider;
 use alloy_rpc_client::RpcClient;
@@ -40,6 +43,8 @@ pub struct RollupNodeBuilder {
     rpc_config: Option<RpcBuilder>,
     /// The [`SequencerConfig`].
     sequencer_config: Option<SequencerConfig>,
+    /// The [`VerifierConfig`].
+    verifier_config: Option<VerifierConfig>,
     /// The mode to run the node in.
     mode: NodeMode,
     /// Whether to run the node in interop mode.
@@ -97,6 +102,11 @@ impl RollupNodeBuilder {
         Self { sequencer_config: Some(sequencer_config), ..self }
     }
 
+    /// Appends the [`VerifierConfig`] to the builder.
+    pub fn with_verifier_config(self, verifier_config: VerifierConfig) -> Self {
+        Self { verifier_config: Some(verifier_config), ..self }
+    }
+
     /// Assembles the [`RollupNode`] service.
     ///
     /// ## Panics
@@ -139,6 +149,7 @@ impl RollupNodeBuilder {
 
         let p2p_config = self.p2p_config.expect("P2P config not set");
         let sequencer_config = self.sequencer_config.unwrap_or_default();
+        let verifier_config = self.verifier_config.unwrap_or_default();
 
         RollupNode {
             config: rollup_config,
@@ -150,6 +161,7 @@ impl RollupNodeBuilder {
             rpc_builder: self.rpc_config,
             p2p_config,
             sequencer_config,
+            verifier_config,
         }
     }
 }

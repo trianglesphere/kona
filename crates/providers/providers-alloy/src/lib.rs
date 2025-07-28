@@ -18,6 +18,9 @@ pub use blobs::{BlobSidecarProvider, OnlineBlobProvider};
 mod chain_provider;
 pub use chain_provider::{AlloyChainProvider, AlloyChainProviderError};
 
+mod confirmation_delayed;
+pub use confirmation_delayed::{ConfirmationDelayError, ConfirmationDelayedProvider};
+
 mod l2_chain_provider;
 pub use l2_chain_provider::{AlloyL2ChainProvider, AlloyL2ChainProviderError};
 

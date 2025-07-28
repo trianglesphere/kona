@@ -72,6 +72,7 @@ impl SequencerArgs {
             sequencer_stopped: self.stopped,
             sequencer_recovery_mode: self.recover,
             conductor_rpc_url: self.conductor_rpc.clone(),
+            l1_confirmations: self.l1_confs,
         }
     }
 }

@@ -37,3 +37,6 @@ pub use sequencer::{
     L1OriginSelectorError, L1OriginSelectorProvider, SequencerActor, SequencerActorError,
     SequencerBuilder, SequencerConfig, SequencerContext, SequencerInboundData,
 };
+
+mod verifier;
+pub use verifier::VerifierConfig;

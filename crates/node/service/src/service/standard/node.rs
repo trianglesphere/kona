@@ -2,7 +2,7 @@
 use crate::{
     DerivationActor, DerivationBuilder, EngineActor, EngineBuilder, InteropMode, L1WatcherRpc,
     L1WatcherRpcState, NetworkActor, NetworkBuilder, NetworkConfig, NodeMode, RollupNodeBuilder,
-    RollupNodeService, RpcActor, SequencerConfig,
+    RollupNodeService, RpcActor, SequencerConfig, VerifierConfig,
     actors::{SequencerActor, SequencerBuilder},
 };
 use alloy_provider::RootProvider;
@@ -39,6 +39,8 @@ pub struct RollupNode {
     pub(crate) p2p_config: NetworkConfig,
     /// The [`SequencerConfig`] for the node.
     pub(crate) sequencer_config: SequencerConfig,
+    /// The [`VerifierConfig`] for the node.
+    pub(crate) verifier_config: VerifierConfig,
 }
 
 impl RollupNode {
@@ -98,6 +100,7 @@ impl RollupNodeService for RollupNode {
             l2_provider: self.l2_provider.clone(),
             rollup_config: self.config.clone(),
             interop_mode: self.interop_mode,
+            verifier_config: self.verifier_config.clone(),
         }
     }
 }

@@ -23,7 +23,7 @@ pub use actors::{
     NetworkBuilderError, NetworkConfig, NetworkContext, NetworkDriver, NetworkDriverError,
     NetworkHandler, NetworkInboundData, NodeActor, PipelineBuilder, RpcActor, RpcActorError,
     RpcContext, SequencerActor, SequencerActorError, SequencerBuilder, SequencerConfig,
-    SequencerContext, SequencerInboundData,
+    SequencerContext, SequencerInboundData, VerifierConfig,
 };
 
 mod metrics;

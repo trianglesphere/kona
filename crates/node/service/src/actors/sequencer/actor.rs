@@ -1,13 +1,14 @@
 //! The [`SequencerActor`].
 
-use super::{L1OriginSelector, L1OriginSelectorError, SequencerConfig};
+use super::{L1OriginSelector, L1OriginSelectorError, L1OriginSelectorProvider, SequencerConfig};
 use crate::{CancellableContext, NodeActor, actors::sequencer::conductor::ConductorClient};
+use alloy_primitives::B256;
 use alloy_provider::RootProvider;
 use async_trait::async_trait;
 use kona_derive::{AttributesBuilder, PipelineErrorKind, StatefulAttributesBuilder};
 use kona_genesis::RollupConfig;
 use kona_protocol::{BlockInfo, L2BlockInfo, OpAttributesWithParent};
-use kona_providers_alloy::{AlloyChainProvider, AlloyL2ChainProvider};
+use kona_providers_alloy::{AlloyChainProvider, AlloyL2ChainProvider, ConfirmationDelayedProvider};
 use kona_rpc::SequencerAdminQuery;
 use op_alloy_network::Optimism;
 use op_alloy_rpc_types_engine::OpExecutionPayloadEnvelope;
@@ -20,6 +21,7 @@ use tokio::{
     sync::{mpsc, watch},
 };
 use tokio_util::sync::{CancellationToken, WaitForCancellationFuture};
+use tracing::warn;
 
 /// The [`SequencerActor`] is responsible for building L2 blocks on top of the current unsafe head
 /// and scheduling them to be signed and gossipped by the P2P layer, extending the L2 chain with new
@@ -71,8 +73,12 @@ impl From<SequencerBuilder>
     for SequencerActorState<StatefulAttributesBuilder<AlloyChainProvider, AlloyL2ChainProvider>>
 {
     fn from(seq_builder: SequencerBuilder) -> Self {
-        let SequencerConfig { sequencer_stopped, sequencer_recovery_mode, conductor_rpc_url } =
-            seq_builder.seq_cfg.clone();
+        let SequencerConfig {
+            sequencer_stopped,
+            sequencer_recovery_mode,
+            conductor_rpc_url,
+            l1_confirmations,
+        } = seq_builder.seq_cfg.clone();
 
         let cfg = seq_builder.rollup_cfg.clone();
         let l1_provider = seq_builder.l1_provider.clone();
@@ -80,6 +86,16 @@ impl From<SequencerBuilder>
 
         let builder = seq_builder.build();
 
+        // Create L1OriginSelector with confirmation delay if configured
+        // For now, we note the configuration but continue with regular provider
+        // TODO: Implement confirmation-delayed provider integration
+        if l1_confirmations > 0 {
+            warn!(
+                target: "sequencer",
+                l1_confirmations,
+                "Sequencer L1 confirmations configured but not yet implemented in L1OriginSelector"
+            );
+        }
         let origin_selector = L1OriginSelector::new(cfg.clone(), l1_provider);
 
         Self {
@@ -487,5 +503,45 @@ impl NodeActor for SequencerActor<SequencerBuilder> {
                 }
             }
         }
+    }
+}
+
+// Implementation of L1OriginSelectorProvider for ConfirmationDelayedProvider
+#[async_trait]
+impl<T> L1OriginSelectorProvider for ConfirmationDelayedProvider<T>
+where
+    T: alloy_provider::Provider + Send + Sync,
+{
+    async fn get_block_by_hash(
+        &self,
+        hash: B256,
+    ) -> Result<Option<BlockInfo>, L1OriginSelectorError> {
+        // For hash-based queries, delegate to the underlying provider
+        Ok(alloy_provider::Provider::get_block_by_hash(&self.inner, hash)
+            .await
+            .map_err(L1OriginSelectorError::Provider)?
+            .map(Into::into))
+    }
+
+    async fn get_block_by_number(
+        &self,
+        number: u64,
+    ) -> Result<Option<BlockInfo>, L1OriginSelectorError> {
+        // Validate that the requested block number is within the confirmed range
+        let latest_confirmed = self
+            .get_latest_confirmed_block_number()
+            .await
+            .map_err(L1OriginSelectorError::Provider)?;
+
+        if number > latest_confirmed {
+            // Return None instead of an error for blocks that aren't confirmed yet
+            // This allows the L1OriginSelector to handle missing blocks gracefully
+            return Ok(None);
+        }
+
+        Ok(alloy_provider::Provider::get_block_by_number(&self.inner, number.into())
+            .await
+            .map_err(L1OriginSelectorError::Provider)?
+            .map(Into::into))
     }
 }

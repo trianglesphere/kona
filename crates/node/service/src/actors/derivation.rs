@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{InteropMode, Metrics, NodeActor, actors::CancellableContext};
+use crate::{InteropMode, Metrics, NodeActor, VerifierConfig, actors::CancellableContext};
 use alloy_provider::RootProvider;
 use async_trait::async_trait;
 use kona_derive::{
@@ -106,6 +106,8 @@ pub struct DerivationBuilder {
     pub rollup_config: Arc<RollupConfig>,
     /// The interop mode.
     pub interop_mode: InteropMode,
+    /// The verifier config for L1 confirmations.
+    pub verifier_config: VerifierConfig,
 }
 
 #[async_trait]
@@ -114,8 +116,19 @@ impl PipelineBuilder for DerivationBuilder {
 
     async fn build(self) -> DerivationState<OnlinePipeline> {
         // Create the caching L1/L2 EL providers for derivation.
-        let l1_derivation_provider =
+        let l1_base_provider =
             AlloyChainProvider::new(self.l1_provider.clone(), DERIVATION_PROVIDER_CACHE_SIZE);
+
+        // Wrap with confirmation delay if configured
+        let l1_derivation_provider = if self.verifier_config.l1_confirmations > 0 {
+            // For now, we'll create a wrapper that implements ChainProvider
+            // but maintains compatibility with the existing pipeline
+            // TODO: This is a placeholder - need to handle type compatibility
+            l1_base_provider
+        } else {
+            l1_base_provider
+        };
+
         let l2_derivation_provider = AlloyL2ChainProvider::new(
             self.l2_provider.clone(),
             self.rollup_config.clone(),
