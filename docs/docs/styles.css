@@ -129,3 +129,35 @@
 /* .vocs_Header_root { */
 /*   padding-left: 2rem !important; */
 /* } */
+
+/* Custom Footer */
+.vocs-custom-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--vocs-color-background);
+  border-top: 1px solid var(--vocs-color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--vocs-color-text-secondary);
+  z-index: 100;
+}
+
+.vocs-custom-footer a {
+  color: var(--vocs-color-accent);
+  text-decoration: none;
+  margin: 0 4px;
+}
+
+.vocs-custom-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Ensure main content doesn't overlap footer */
+.vocs_Content_root {
+  padding-bottom: 80px !important;
+}

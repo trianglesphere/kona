@@ -8,6 +8,16 @@ export default defineConfig({
   iconUrl: '/logo.png',
   ogImageUrl: '/kona-prod.png',
   sidebar,
+  head: [
+    ['script', {}, `
+      document.addEventListener('DOMContentLoaded', function() {
+        const footer = document.createElement('div');
+        footer.className = 'vocs-custom-footer';
+        footer.innerHTML = 'Built by <a href="https://oplabs.co" target="_blank" rel="noopener noreferrer">OP Labs</a> and open source contributors. • <a href="https://github.com/op-rs/kona" target="_blank" rel="noopener noreferrer">GitHub</a>';
+        document.body.appendChild(footer);
+      });
+    `]
+  ],
   topNav: [
     { text: 'Run', link: '/node/run/overview' },
     { text: 'SDK', link: '/sdk/overview' },
