@@ -1,4 +1,5 @@
 //! This crate contains the core logic for the Optimism Supervisor component.
+#![deny(unused_crate_dependencies)]
 
 pub mod chain_processor;
 pub use chain_processor::{ChainProcessor, ChainProcessorError};

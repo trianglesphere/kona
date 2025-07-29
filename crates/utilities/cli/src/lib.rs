@@ -3,27 +3,5 @@
     html_logo_url = "https://raw.githubusercontent.com/op-rs/kona/main/assets/square.png",
     html_favicon_url = "https://raw.githubusercontent.com/op-rs/kona/main/assets/favicon.ico"
 )]
+#![deny(unused_crate_dependencies)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
-
-mod clap;
-pub use clap::cli_styles;
-
-#[cfg(feature = "secrets")]
-mod secrets;
-#[cfg(feature = "secrets")]
-pub use secrets::{KeypairError, ParseKeyError, SecretKeyLoader};
-
-pub mod backtrace;
-
-pub mod log;
-pub use log::LogConfig;
-
-mod tracing;
-pub use tracing::{LogFormat, init_test_tracing};
-
-mod prometheus;
-pub use prometheus::init_prometheus_server;
-
-pub mod sigsegv_handler;
-
-pub mod metrics_args;

@@ -2,6 +2,7 @@
 //!
 //! This crate defines the fundamental data structures used within the
 //! Optimism supervisor.
+#![deny(unused_crate_dependencies)]
 
 pub mod head;
 pub use head::SuperHead;

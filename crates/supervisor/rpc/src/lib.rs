@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![deny(unused_crate_dependencies)]
 
 #[cfg(feature = "jsonrpsee")]
 pub mod jsonrpsee;

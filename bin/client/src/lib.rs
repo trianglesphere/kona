@@ -4,6 +4,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 #![allow(clippy::type_complexity)]
 #![cfg_attr(not(test), no_std)]
+#![deny(unused_crate_dependencies)]
 
 extern crate alloc;
 

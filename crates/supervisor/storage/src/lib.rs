@@ -18,6 +18,7 @@
 //! - Look up logs by block number and index
 //! - Rewind logs during reorgs
 //! - Track sealed blocks and ancestry metadata
+#![deny(unused_crate_dependencies)]
 
 pub mod models;
 pub use models::SourceBlockTraversal;

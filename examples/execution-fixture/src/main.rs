@@ -15,6 +15,7 @@
 //! - `-b` or `--block-number`: L2 block number to execute for the fixture.
 //! - `-o` or `--output-dir`: (Optional) The output directory for the fixture. If not provided,
 //!   defaults to `kona-executor`'s `testdata` directory.
+#![deny(unused_crate_dependencies)]
 
 use anyhow::{Result, anyhow};
 use clap::Parser;

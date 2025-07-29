@@ -15,7 +15,7 @@
 //! - `-l` or `--gossip-port`: Port to listen for gossip on
 //! - `-i` or `--interval`: Interval to send discovery packets
 
-#![warn(unused_crate_dependencies)]
+#![deny(unused_crate_dependencies)]
 
 use clap::Parser;
 use discv5::enr::CombinedKey;
