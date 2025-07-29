@@ -47,7 +47,7 @@ where
                 "eth_getBlockByNumber",
                 (BlockNumberOrTag::Finalized, false),
             )
-            .with_poll_interval(Duration::from_secs(47));
+            .with_poll_interval(Duration::from_secs(12));
 
         let finalized_head_stream = finalized_head_poller.into_stream();
 
