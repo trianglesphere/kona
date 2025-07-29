@@ -2892,6 +2892,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "example-p2p-scoring"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "discv5",
+ "kona-cli",
+ "kona-node-service",
+ "kona-p2p",
+ "kona-peers",
+ "kona-registry",
+ "libp2p",
+ "openssl",
+ "serde",
+ "serde_json",
+ "snap",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+]
+
+[[package]]
 name = "execution-fixture"
 version = "0.0.0"
 dependencies = [
