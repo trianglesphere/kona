@@ -23,3 +23,8 @@ pub use l2_chain_provider::{AlloyL2ChainProvider, AlloyL2ChainProviderError};
 
 mod pipeline;
 pub use pipeline::OnlinePipeline;
+
+#[cfg(feature = "metrics")]
+mod metrics;
+#[cfg(feature = "metrics")]
+pub use metrics::Metrics;

@@ -108,11 +108,15 @@ impl BeaconClient for OnlineBeaconClient {
     type Error = reqwest::Error;
 
     async fn config_spec(&self) -> Result<APIConfigResponse, Self::Error> {
+        #[cfg(feature = "metrics")]
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "beacon_config_spec");
         let first = self.inner.get(format!("{}/{}", self.base, SPEC_METHOD)).send().await?;
         first.json::<APIConfigResponse>().await
     }
 
     async fn beacon_genesis(&self) -> Result<APIGenesisResponse, Self::Error> {
+        #[cfg(feature = "metrics")]
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "beacon_genesis");
         let first = self.inner.get(format!("{}/{}", self.base, GENESIS_METHOD)).send().await?;
         first.json::<APIGenesisResponse>().await
     }
@@ -122,6 +126,8 @@ impl BeaconClient for OnlineBeaconClient {
         slot: u64,
         hashes: &[IndexedBlobHash],
     ) -> Result<Vec<BlobData>, Self::Error> {
+        #[cfg(feature = "metrics")]
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "beacon_blob_side_cars");
         let raw_response = self
             .inner
             .get(format!("{}/{}/{}", self.base, SIDECARS_METHOD_PREFIX, slot))

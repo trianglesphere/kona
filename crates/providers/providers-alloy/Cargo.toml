@@ -17,6 +17,7 @@ rust-version.workspace = true
 kona-genesis.workspace = true
 kona-protocol.workspace = true
 kona-derive.workspace = true
+kona-macros.workspace = true
 
 # Alloy
 alloy-serde.workspace = true
@@ -43,5 +44,12 @@ reqwest = { workspace = true, features = ["json"] }
 tower.workspace = true
 http-body-util.workspace = true
 
+# Metrics (optional)
+metrics = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio.workspace = true
+
+[features]
+default = []
+metrics = ["dep:metrics"]
