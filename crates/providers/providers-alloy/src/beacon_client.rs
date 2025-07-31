@@ -108,7 +108,7 @@ impl BeaconClient for OnlineBeaconClient {
     type Error = reqwest::Error;
 
     async fn config_spec(&self) -> Result<APIConfigResponse, Self::Error> {
-        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "beacon_config_spec");
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "config_spec");
         let first = self.inner.get(format!("{}/{}", self.base, SPEC_METHOD)).send().await?;
         first.json::<APIConfigResponse>().await
     }

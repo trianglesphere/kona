@@ -52,13 +52,13 @@ impl AlloyL2ChainProvider {
 
     /// Returns the chain ID.
     pub async fn chain_id(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
-        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "l2_chain_get_chain_id");
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_id");
         self.inner.get_chain_id().await
     }
 
     /// Returns the latest L2 block number.
     pub async fn latest_block_number(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
-        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "l2_chain_get_block_number");
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "latest_block_number");
         self.inner.get_block_number().await
     }
 
@@ -70,11 +70,11 @@ impl AlloyL2ChainProvider {
     ) -> Result<Option<L2BlockInfo>, RpcError<TransportErrorKind>> {
         let block = match id {
             BlockId::Number(num) => {
-                kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "l2_chain_get_block_by_number");
+                kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "block_info_by_id");
                 self.inner.get_block_by_number(num).full().await?
             }
             BlockId::Hash(hash) => {
-                kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "l2_chain_get_block_by_hash");
+                kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "block_info_by_id");
                 self.inner.get_block_by_hash(hash.block_hash).full().await?
             }
         };
@@ -173,7 +173,7 @@ impl BatchValidationProvider for AlloyL2ChainProvider {
             return Ok(block.clone());
         }
 
-        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "l2_chain_get_block_by_number");
+        kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "block_by_number");
         let block = self
             .inner
             .get_block_by_number(number.into())
