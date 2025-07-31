@@ -49,14 +49,12 @@ impl AlloyChainProvider {
 
     /// Returns the latest L2 block number.
     pub async fn latest_block_number(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
-        #[cfg(feature = "metrics")]
         kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_get_block_number");
         self.inner.get_block_number().await
     }
 
     /// Returns the chain ID.
     pub async fn chain_id(&mut self) -> Result<u64, RpcError<TransportErrorKind>> {
-        #[cfg(feature = "metrics")]
         kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_get_chain_id");
         self.inner.get_chain_id().await
     }
@@ -104,7 +102,6 @@ impl ChainProvider for AlloyChainProvider {
             return Ok(header.clone());
         }
 
-        #[cfg(feature = "metrics")]
         kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_get_block_by_hash");
         let block = self
             .inner
@@ -119,7 +116,6 @@ impl ChainProvider for AlloyChainProvider {
     }
 
     async fn block_info_by_number(&mut self, number: u64) -> Result<BlockInfo, Self::Error> {
-        #[cfg(feature = "metrics")]
         kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_get_block_by_number");
         let block = self
             .inner
@@ -142,7 +138,6 @@ impl ChainProvider for AlloyChainProvider {
             return Ok(receipts.clone());
         }
 
-        #[cfg(feature = "metrics")]
         kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_get_block_receipts");
         let receipts = self
             .inner
@@ -168,7 +163,6 @@ impl ChainProvider for AlloyChainProvider {
             return Ok(block_info_and_txs.clone());
         }
 
-        #[cfg(feature = "metrics")]
         kona_macros::inc!(gauge, crate::Metrics::RPC_CALLS, "method" => "chain_get_block_by_hash");
         let block = self
             .inner
