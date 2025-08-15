@@ -8,7 +8,7 @@ use core::fmt::Debug;
 use kona_protocol::BlockInfo;
 
 /// Mock data availability provider
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct TestDAP {
     /// Specifies the stage results.
     pub results: Vec<PipelineResult<Bytes>>,

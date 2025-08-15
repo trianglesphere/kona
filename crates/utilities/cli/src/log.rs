@@ -114,7 +114,7 @@ pub struct LogConfig {
 impl Default for LogConfig {
     fn default() -> Self {
         Self {
-            global_level: LevelFilter::INFO,
+            global_level: LevelFilter::DEBUG,
             stdout_logs: Some(StdoutLogConfig { format: LogFormat::Full }),
             file_logs: None,
         }

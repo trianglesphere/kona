@@ -3,12 +3,15 @@ use std::time::SystemTime;
 use alloy_consensus::{Block, EMPTY_OMMER_ROOT_HASH};
 use alloy_eips::Encodable2718;
 use alloy_primitives::Bytes;
+use alloy_rpc_types_engine::PayloadAttributes;
 use arbitrary::{Arbitrary, Unstructured};
 use libp2p::bytes::BufMut;
 use op_alloy_consensus::OpTxEnvelope;
-use op_alloy_rpc_types_engine::{OpExecutionPayload, OpExecutionPayloadEnvelope};
+use op_alloy_rpc_types_engine::{
+    OpExecutionPayload, OpExecutionPayloadEnvelope, OpPayloadAttributes,
+};
 
-use crate::actors::generator::seed::SeedGenerator;
+use crate::actors::mocks::seed::SeedGenerator;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum PayloadVersion {

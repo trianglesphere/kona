@@ -1,4 +1,4 @@
-use crate::actors::network::mocks::builder::TestNetworkBuilder;
+use crate::actors::network::helpers::builder::TestNetworkBuilder;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_p2p_network_conn() -> anyhow::Result<()> {

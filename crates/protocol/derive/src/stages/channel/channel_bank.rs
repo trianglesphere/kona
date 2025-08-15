@@ -104,8 +104,8 @@ where
 
         // Ingest the frame. If it fails, ignore the frame.
         let frame_id = frame.id;
-        if current_channel.add_frame(frame, origin).is_err() {
-            warn!(target: "channel_bank", "Failed to add frame to channel: {:?}", frame_id);
+        if let Err(e) = current_channel.add_frame(frame, origin) {
+            warn!(target: "channel_bank", ?e, "Failed to add frame to channel: {:?}", frame_id);
             return Ok(());
         }
 

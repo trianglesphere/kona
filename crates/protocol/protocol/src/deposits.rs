@@ -19,7 +19,7 @@ pub const DEPOSIT_EVENT_ABI_HASH: B256 =
 pub const DEPOSIT_EVENT_VERSION_0: B256 = B256::ZERO;
 
 /// An [`TxDeposit`] validation error.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
 pub enum DepositError {
     /// Unexpected number of deposit event log topics.
     #[error("Unexpected number of deposit event log topics: {0}")]

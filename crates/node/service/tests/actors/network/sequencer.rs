@@ -1,6 +1,6 @@
 use crate::actors::{
-    generator::{block_builder::PayloadVersion, seed::SEED_GENERATOR_BUILDER},
-    network::mocks::builder::TestNetworkBuilder,
+    mocks::{block_builder::PayloadVersion, seed::SEED_GENERATOR_BUILDER},
+    network::helpers::builder::TestNetworkBuilder,
 };
 
 /// Test that we can properly gossip blocks to the sequencer.

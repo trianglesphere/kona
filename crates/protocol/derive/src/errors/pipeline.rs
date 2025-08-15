@@ -39,7 +39,7 @@ macro_rules! ensure {
 /// - Temporary errors trigger retries in the main derivation loop
 /// - Critical errors halt derivation and bubble up to the caller
 /// - Reset errors trigger pipeline resets with appropriate recovery logic
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PipelineErrorKind {
     /// A temporary error that may resolve with additional data or time.
     ///
@@ -120,7 +120,7 @@ pub enum PipelineErrorKind {
 /// - [`Self::SystemConfigUpdate`]: System configuration update failures
 /// - [`Self::AttributesBuilder`]: Block attribute construction failures
 /// - [`Self::Provider`]: External provider communication failures
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PipelineError {
     /// End of file: no more data available from the channel bank.
     ///
@@ -353,7 +353,7 @@ impl ResetError {
 }
 
 /// A decoding error.
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PipelineEncodingError {
     /// The buffer is empty.
     #[error("Empty buffer")]

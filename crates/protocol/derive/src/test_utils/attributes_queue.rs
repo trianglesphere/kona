@@ -15,11 +15,11 @@ use op_alloy_rpc_types_engine::OpPayloadAttributes;
 use thiserror::Error;
 
 /// An error returned by the [`TestAttributesBuilder`].
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TestAttributesBuilderError {}
 
 /// A mock implementation of the [`AttributesBuilder`] for testing.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct TestAttributesBuilder {
     /// The attributes to return.
     pub attributes: Vec<Result<OpPayloadAttributes, TestAttributesBuilderError>>,

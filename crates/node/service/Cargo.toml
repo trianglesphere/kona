@@ -68,6 +68,11 @@ http-body-util.workspace = true
 metrics = { workspace = true, optional = true }
 
 [dev-dependencies]
+kona-proof.workspace = true
+kona-derive = { workspace = true, features = ["test-utils"] }
+kona-cli.workspace = true
+kona-protocol = { workspace = true, features = ["arbitrary"] }
+
 rstest.workspace = true
 arbitrary.workspace = true
 rand.workspace = true

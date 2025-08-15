@@ -286,7 +286,7 @@ where
                                 {
                                     reset_request_tx.send(()).await.map_err(|e| {
                                         error!(target: "derivation", ?e, "Failed to send reset request");
-                                        DerivationError::Sender(Box::new(e))
+                                        DerivationError::Sender(Arc::new(e))
                                     })?;
                                 }
                                 self.waiting_for_signal = true;
@@ -387,7 +387,7 @@ where
         derived_attributes_tx
             .send(payload_attrs)
             .await
-            .map_err(|e| DerivationError::Sender(Box::new(e)))?;
+            .map_err(|e| DerivationError::Sender(Arc::new(e)))?;
 
         Ok(())
     }
@@ -518,7 +518,7 @@ pub enum DerivationError {
     Yield,
     /// An error originating from the broadcast sender.
     #[error("Failed to send event to broadcast sender: {0}")]
-    Sender(Box<dyn std::error::Error>),
+    Sender(Arc<dyn std::error::Error + Send + Sync>),
     /// An error from the signal receiver.
     #[error("Failed to receive signal")]
     SignalReceiveFailed,

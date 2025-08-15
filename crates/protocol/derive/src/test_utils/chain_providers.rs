@@ -92,7 +92,7 @@ pub enum TestProviderError {
     #[error("L2 Block not found")]
     L2BlockNotFound,
     /// The system config was not found.
-    #[error("System config not found")]
+    #[error("System config not found: {0}")]
     SystemConfigNotFound(u64),
 }
 

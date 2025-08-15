@@ -121,11 +121,14 @@ where
             }
         };
 
-        let Ok(frames) = Frame::parse_frames(&data.into()) else {
-            // There may be more frames in the queue for the
-            // pipeline to advance, so don't return an error here.
-            error!(target: "frame_queue", "Failed to parse frames from data.");
-            return Ok(());
+        let frames = match Frame::parse_frames(&data.into()) {
+            Ok(frames) => frames,
+            Err(e) => {
+                // There may be more frames in the queue for the
+                // pipeline to advance, so don't return an error here.
+                error!(target: "frame_queue", "Failed to parse frames from data: {:?}", e);
+                return Ok(());
+            }
         };
 
         // Optimistically extend the queue with the new frames.

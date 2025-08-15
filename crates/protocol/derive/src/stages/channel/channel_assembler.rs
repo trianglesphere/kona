@@ -112,9 +112,10 @@ where
                 hex::encode(channel.id()),
                 origin.number
             );
-            if channel.add_frame(next_frame, origin).is_err() {
+            if let Err(e) = channel.add_frame(next_frame, origin) {
                 error!(
                     target: "channel_assembler",
+                    ?e,
                     "Failed to add frame to channel (ID: {}) at L1 origin #{}",
                     hex::encode(channel.id()),
                     origin.number
