@@ -4592,6 +4592,7 @@ dependencies = [
  "kona-peers",
  "lazy_static",
  "libp2p",
+ "libp2p-allow-block-list",
  "libp2p-identity",
  "libp2p-stream",
  "metrics",

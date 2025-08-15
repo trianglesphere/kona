@@ -38,6 +38,9 @@ pub struct Behaviour {
     /// See `<https://specs.optimism.io/protocol/rollup-node-p2p.html#payload_by_number>`
     #[debug(skip)]
     pub sync_req_resp: libp2p_stream::Behaviour,
+    /// Enables allow/block list for connection management.
+    #[debug(skip)]
+    pub allow_block_list: libp2p_allow_block_list::Behaviour<libp2p_allow_block_list::BlockedPeers>,
 }
 
 impl Behaviour {
@@ -59,6 +62,8 @@ impl Behaviour {
         );
 
         let sync_req_resp = libp2p_stream::Behaviour::new();
+
+        let allow_block_list = libp2p_allow_block_list::Behaviour::default();
 
         let subscriptions = handlers
             .iter()
@@ -84,7 +89,7 @@ impl Behaviour {
             tracing::info!(target: "gossip", "-> {}", topic);
         }
 
-        Ok(Self { identify, ping, gossipsub, sync_req_resp })
+        Ok(Self { identify, ping, gossipsub, sync_req_resp, allow_block_list })
     }
 }
 
@@ -128,5 +133,105 @@ mod tests {
         let mut topics = behaviour.gossipsub.topics().cloned().collect::<Vec<TopicHash>>();
         topics.sort();
         assert_eq!(topics, op_mainnet_topics());
+    }
+
+    #[test]
+    fn test_allow_block_list_peer_blocking() {
+        let key = libp2p::identity::Keypair::generate_secp256k1();
+        let cfg = config::default_config();
+        let handlers = vec![];
+        let mut behaviour = Behaviour::new(key.public(), cfg, &handlers).unwrap();
+
+        // Generate a test peer ID
+        let test_peer = libp2p::PeerId::random();
+
+        // Initially, no peers should be blocked
+        assert!(behaviour.allow_block_list.blocked_peers().is_empty());
+
+        // Block the peer
+        behaviour.allow_block_list.block_peer(test_peer);
+
+        // Verify the peer is now blocked
+        let blocked_peers: Vec<libp2p::PeerId> =
+            behaviour.allow_block_list.blocked_peers().iter().copied().collect();
+        assert_eq!(blocked_peers.len(), 1);
+        assert!(blocked_peers.contains(&test_peer));
+
+        // Unblock the peer
+        behaviour.allow_block_list.unblock_peer(test_peer);
+
+        // Verify the peer is no longer blocked
+        assert!(behaviour.allow_block_list.blocked_peers().is_empty());
+    }
+
+    #[test]
+    fn test_allow_block_list_multiple_peers() {
+        let key = libp2p::identity::Keypair::generate_secp256k1();
+        let cfg = config::default_config();
+        let handlers = vec![];
+        let mut behaviour = Behaviour::new(key.public(), cfg, &handlers).unwrap();
+
+        // Generate multiple test peer IDs
+        let peer1 = libp2p::PeerId::random();
+        let peer2 = libp2p::PeerId::random();
+        let peer3 = libp2p::PeerId::random();
+
+        // Block multiple peers
+        behaviour.allow_block_list.block_peer(peer1);
+        behaviour.allow_block_list.block_peer(peer2);
+        behaviour.allow_block_list.block_peer(peer3);
+
+        // Verify all peers are blocked
+        let blocked_peers: Vec<libp2p::PeerId> =
+            behaviour.allow_block_list.blocked_peers().iter().copied().collect();
+        assert_eq!(blocked_peers.len(), 3);
+        assert!(blocked_peers.contains(&peer1));
+        assert!(blocked_peers.contains(&peer2));
+        assert!(blocked_peers.contains(&peer3));
+
+        // Unblock one peer
+        behaviour.allow_block_list.unblock_peer(peer2);
+
+        // Verify only peer2 is unblocked
+        let blocked_peers: Vec<libp2p::PeerId> =
+            behaviour.allow_block_list.blocked_peers().iter().copied().collect();
+        assert_eq!(blocked_peers.len(), 2);
+        assert!(blocked_peers.contains(&peer1));
+        assert!(!blocked_peers.contains(&peer2));
+        assert!(blocked_peers.contains(&peer3));
+    }
+
+    #[test]
+    fn test_allow_block_list_idempotent_operations() {
+        let key = libp2p::identity::Keypair::generate_secp256k1();
+        let cfg = config::default_config();
+        let handlers = vec![];
+        let mut behaviour = Behaviour::new(key.public(), cfg, &handlers).unwrap();
+
+        let test_peer = libp2p::PeerId::random();
+
+        // Block the same peer multiple times
+        behaviour.allow_block_list.block_peer(test_peer);
+        behaviour.allow_block_list.block_peer(test_peer);
+        behaviour.allow_block_list.block_peer(test_peer);
+
+        // Should still only have one entry
+        let blocked_peers: Vec<libp2p::PeerId> =
+            behaviour.allow_block_list.blocked_peers().iter().copied().collect();
+        assert_eq!(blocked_peers.len(), 1);
+        assert!(blocked_peers.contains(&test_peer));
+
+        // Unblock the peer multiple times
+        behaviour.allow_block_list.unblock_peer(test_peer);
+        behaviour.allow_block_list.unblock_peer(test_peer);
+        behaviour.allow_block_list.unblock_peer(test_peer);
+
+        // Should be empty
+        assert!(behaviour.allow_block_list.blocked_peers().is_empty());
+
+        // Unblocking a non-blocked peer should be safe
+        let other_peer = libp2p::PeerId::random();
+        behaviour.allow_block_list.unblock_peer(other_peer);
+        assert!(behaviour.allow_block_list.blocked_peers().is_empty());
     }
 }

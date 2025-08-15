@@ -1,6 +1,7 @@
 //! Event Handling Module.
 
 use libp2p::{gossipsub, identify, ping};
+use std::convert::Infallible;
 
 /// High-level events emitted by the gossip networking system.
 ///
@@ -62,6 +63,16 @@ impl From<()> for Event {
     /// Converts () to [Event]
     fn from(_value: ()) -> Self {
         Self::Stream
+    }
+}
+
+impl From<Infallible> for Event {
+    /// Converts Infallible to [Event]
+    /// This is needed for the allow_block_list behavior which generates no events
+    fn from(_value: Infallible) -> Self {
+        // This can never be called since Infallible has no values,
+        // but we need it to satisfy the NetworkBehaviour trait bounds
+        unreachable!()
     }
 }
 

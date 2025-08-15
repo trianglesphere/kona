@@ -159,17 +159,16 @@ impl P2pRpcRequest {
     }
 
     fn block_peer<G: ConnectionGate>(id: PeerId, gossip: &mut GossipDriver<G>) {
-        gossip.connection_gate.block_peer(&id);
-        gossip.swarm.behaviour_mut().gossipsub.blacklist_peer(&id);
+        gossip.swarm.behaviour_mut().allow_block_list.block_peer(id);
     }
 
     fn unblock_peer<G: ConnectionGate>(id: PeerId, gossip: &mut GossipDriver<G>) {
-        gossip.connection_gate.unblock_peer(&id);
-        gossip.swarm.behaviour_mut().gossipsub.remove_blacklisted_peer(&id);
+        gossip.swarm.behaviour_mut().allow_block_list.unblock_peer(id);
     }
 
     fn list_blocked_peers<G: ConnectionGate>(s: Sender<Vec<PeerId>>, gossip: &GossipDriver<G>) {
-        let blocked_peers = gossip.connection_gate.list_blocked_peers();
+        let blocked_peers =
+            gossip.swarm.behaviour().allow_block_list.blocked_peers().iter().copied().collect();
         if let Err(e) = s.send(blocked_peers) {
             warn!(target: "p2p::rpc", "Failed to send blocked peers through response channel: {:?}", e);
         }
@@ -249,7 +248,8 @@ impl P2pRpcRequest {
         // Get connection gate information.
         let banned_subnets = gossip.connection_gate.list_blocked_subnets();
         let banned_ips = gossip.connection_gate.list_blocked_addrs();
-        let banned_peers = gossip.connection_gate.list_blocked_peers();
+        let banned_peers: Vec<PeerId> =
+            gossip.swarm.behaviour().allow_block_list.blocked_peers().iter().copied().collect();
         let protected_peers = gossip.connection_gate.list_protected_peers();
 
         // For each peer id, get the connectedness using the connection gate.
@@ -539,7 +539,7 @@ impl P2pRpcRequest {
         let gossip_network_info = gossip.swarm.network_info();
         let table_info = disc.peer_count();
 
-        let banned_peers = gossip.connection_gate.list_blocked_peers().len();
+        let banned_peers = gossip.swarm.behaviour().allow_block_list.blocked_peers().len();
 
         let topics = gossip.swarm.behaviour().gossipsub.topics().collect::<HashSet<_>>();
 

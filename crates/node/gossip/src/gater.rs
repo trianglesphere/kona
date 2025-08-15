@@ -75,8 +75,6 @@ pub struct ConnectionGater {
     ///
     /// Protecting a peer prevents the peer from any redial thresholds or peer scoring.
     pub protected_peers: HashSet<PeerId>,
-    /// A set of blocked peer ids.
-    pub blocked_peers: HashSet<PeerId>,
     /// A set of blocked ip addresses that cannot be dialed.
     pub blocked_addrs: HashSet<IpAddr>,
     /// A set of blocked subnets that cannot be connected to.
@@ -92,7 +90,6 @@ impl ConnectionGater {
             dialed_peers: HashMap::new(),
             connectedness: HashMap::new(),
             protected_peers: HashSet::new(),
-            blocked_peers: HashSet::new(),
             blocked_addrs: HashSet::new(),
             blocked_subnets: HashSet::new(),
         }
@@ -181,12 +178,8 @@ impl ConnectionGate for ConnectionGater {
             return Err(DialError::ThresholdReached { addr: addr.clone() });
         }
 
-        // If the peer is blocked, do not dial.
-        if self.blocked_peers.contains(&peer_id) {
-            debug!(target: "gossip", peer=?addr, "Peer is blocked, not dialing");
-            kona_macros::inc!(gauge, crate::Metrics::DIAL_PEER_ERROR, "type" => "blocked_peer", "peer" => peer_id.to_string());
-            return Err(DialError::PeerBlocked { peer_id });
-        }
+        // Note: Peer blocking is now handled by libp2p's allow_block_list behaviour
+        // and does not need to be checked here.
 
         // There must be a reachable IP Address in the Multiaddr protocol stack.
         let ip_addr = Self::ip_from_addr(addr).ok_or_else(|| {
@@ -264,19 +257,26 @@ impl ConnectionGate for ConnectionGater {
     }
 
     fn block_peer(&mut self, peer_id: &PeerId) {
-        self.blocked_peers.insert(*peer_id);
-        debug!(target: "gossip", peer=?peer_id, "Blocked peer");
+        // Peer blocking is now handled by libp2p's allow_block_list behaviour.
+        // This method is kept for trait compatibility but the actual blocking
+        // should be done through the swarm's behaviour.
+        debug!(target: "gossip", peer=?peer_id, "Peer blocking requested (handled by allow_block_list)");
         self.connectedness.insert(*peer_id, Connectedness::CannotConnect);
     }
 
     fn unblock_peer(&mut self, peer_id: &PeerId) {
-        self.blocked_peers.remove(peer_id);
-        debug!(target: "gossip", peer=?peer_id, "Unblocked peer");
+        // Peer unblocking is now handled by libp2p's allow_block_list behaviour.
+        // This method is kept for trait compatibility but the actual unblocking
+        // should be done through the swarm's behaviour.
+        debug!(target: "gossip", peer=?peer_id, "Peer unblocking requested (handled by allow_block_list)");
         self.connectedness.insert(*peer_id, Connectedness::NotConnected);
     }
 
     fn list_blocked_peers(&self) -> Vec<PeerId> {
-        self.blocked_peers.iter().copied().collect()
+        // Blocked peers list is now maintained by libp2p's allow_block_list behaviour.
+        // This method returns an empty list for trait compatibility.
+        // The actual list should be retrieved from the swarm's behaviour.
+        Vec::new()
     }
 
     fn block_addr(&mut self, ip: IpAddr) {
