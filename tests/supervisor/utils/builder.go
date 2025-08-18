@@ -189,7 +189,7 @@ func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Ha
 			safeBlockHash = sb.Hash()
 		}
 	}
-	if safeBlockHash != (common.Hash{}) {
+	if safeBlockHash == (common.Hash{}) {
 		safeBlockHash = parent.Hash()
 	}
 
