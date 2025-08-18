@@ -51,6 +51,11 @@ func NewTestReorgManager(t devtest.CommonT) *TestReorgManager {
 		break
 	}
 
+	if engineURL == "" || rpcURL == "" {
+		t.Errorf("could not find engine or RPC endpoints in the devnet environment")
+		return nil
+	}
+
 	blockBuilder := NewTestBlockBuilder(t, TestBlockBuilderConfig{
 		GethRPC:                rpcURL,
 		EngineRPC:              engineURL,
