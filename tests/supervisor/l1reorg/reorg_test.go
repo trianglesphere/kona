@@ -12,18 +12,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDummy(gt *testing.T) {
-	// gt.Skip()
-	t := devtest.SerialT(gt)
-
-	trm := utils.NewTestReorgManager(t)
-	trm.GetBlockBuilder().BuildBlock(t.Ctx(), nil)
-}
-
 type checksFunc func(t devtest.T, sys *presets.SimpleInterop)
 
 func TestL1Reorg(gt *testing.T) {
-	gt.Skip()
 	gt.Run("unsafe reorg", func(gt *testing.T) {
 		var crossSafeRef, localSafeRef, unsafeRef eth.BlockID
 		pre := func(t devtest.T, sys *presets.SimpleInterop) {
