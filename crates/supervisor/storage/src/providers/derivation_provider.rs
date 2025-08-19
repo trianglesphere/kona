@@ -568,13 +568,12 @@ where
                     return Err(StorageError::ConflictError);
                 }
 
-                if !block_traversal.derived_block_numbers.is_empty() &&
-                    derived_rewind_target.is_none()
+                if derived_rewind_target.is_none() &&
+                    !block_traversal.derived_block_numbers.is_empty()
                 {
-                    let derived_block = self
-                        .get_derived_block_pair_by_number(block_traversal.derived_block_numbers[0])?
-                        .derived;
-                    derived_rewind_target = Some(derived_block.into());
+                    let first_num = block_traversal.derived_block_numbers[0];
+                    let derived_block_pair = self.get_derived_block_pair_by_number(first_num)?;
+                    derived_rewind_target = Some(derived_block_pair.derived.into());
                 }
 
                 walker.delete_current()?;
