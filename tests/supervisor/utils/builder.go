@@ -46,8 +46,8 @@ type rpcError struct {
 }
 
 type TestBlockBuilderConfig struct {
-	safeBlockDistance      int64
-	finalizedBlockDistance int64
+	safeBlockDistance      uint64
+	finalizedBlockDistance uint64
 
 	GethRPC string
 
@@ -164,53 +164,62 @@ func (s *TestBlockBuilder) rewindTo(ctx context.Context, blockHash common.Hash) 
 }
 
 func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Hash) {
-	var parent *types.Block
+	var head *types.Block
 	var err error
 	if parentHash != nil {
-		parent, err = s.rewindTo(ctx, *parentHash)
+		head, err = s.rewindTo(ctx, *parentHash)
 		if err != nil {
 			s.t.Errorf("failed to rewind to parent block: %v", err)
 			return
 		}
 	} else {
-		parent, err = s.ethClient.BlockByNumber(ctx, big.NewInt(int64(rpc.LatestBlockNumber)))
+		head, err = s.ethClient.BlockByNumber(ctx, big.NewInt(int64(rpc.LatestBlockNumber)))
 		if err != nil {
 			s.t.Errorf("failed to fetch latest block: %v", err)
 			return
 		}
 	}
 
-	// Safe/finalized
-	var safeBlockHash, finalizedBlockHash common.Hash
-	if int64(parent.NumberU64()) > s.cfg.safeBlockDistance {
-		safeNum := int64(parent.NumberU64()) - s.cfg.safeBlockDistance
-		sb, err := s.ethClient.BlockByNumber(ctx, big.NewInt(safeNum))
-		if err == nil {
-			safeBlockHash = sb.Hash()
+	finalizedBlock, _ := s.ethClient.BlockByNumber(ctx, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
+	if finalizedBlock == nil {
+		// set sb to genesis if safe block is not set
+		finalizedBlock, err = s.ethClient.BlockByNumber(ctx, big.NewInt(0))
+		if err != nil {
+			s.t.Errorf("failed to fetch genesis block: %v", err)
+			return
 		}
-	}
-	if safeBlockHash == (common.Hash{}) {
-		safeBlockHash = parent.Hash()
 	}
 
-	if int64(parent.NumberU64()) > s.cfg.finalizedBlockDistance {
-		finNum := int64(parent.NumberU64()) - s.cfg.finalizedBlockDistance
-		fr, err := s.ethClient.BlockByNumber(ctx, big.NewInt(finNum))
-		if err == nil {
-			finalizedBlockHash = fr.Hash()
+	// progress finalised block
+	if head.NumberU64() > uint64(s.cfg.finalizedBlockDistance) {
+		finalizedBlock, err = s.ethClient.BlockByNumber(ctx, big.NewInt(int64(head.NumberU64()-s.cfg.finalizedBlockDistance)))
+		if err != nil {
+			s.t.Errorf("failed to fetch safe block: %v", err)
+			return
 		}
 	}
-	if finalizedBlockHash == (common.Hash{}) {
-		finalizedBlockHash = safeBlockHash
+
+	safeBlock, _ := s.ethClient.BlockByNumber(ctx, big.NewInt(rpc.SafeBlockNumber.Int64()))
+	if safeBlock == nil {
+		safeBlock = finalizedBlock
+	}
+
+	// progress safe block
+	if head.NumberU64() > uint64(s.cfg.safeBlockDistance) {
+		safeBlock, err = s.ethClient.BlockByNumber(ctx, big.NewInt(int64(head.NumberU64()-s.cfg.safeBlockDistance)))
+		if err != nil {
+			s.t.Errorf("failed to fetch safe block: %v", err)
+			return
+		}
 	}
 
 	fcState := engine.ForkchoiceStateV1{
-		HeadBlockHash:      parent.Hash(),
-		SafeBlockHash:      safeBlockHash,
-		FinalizedBlockHash: finalizedBlockHash,
+		HeadBlockHash:      head.Hash(),
+		SafeBlockHash:      safeBlock.Hash(),
+		FinalizedBlockHash: finalizedBlock.Hash(),
 	}
 
-	newBlockTimestamp := parent.Time() + 12
+	newBlockTimestamp := head.Time() + 12
 	nonce := time.Now().UnixNano()
 	var nonceBytes [8]byte
 	binary.LittleEndian.PutUint64(nonceBytes[:], uint64(nonce))
@@ -218,9 +227,9 @@ func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Ha
 	payloadAttrs := engine.PayloadAttributes{
 		Timestamp:             uint64(newBlockTimestamp),
 		Random:                randomHash,
-		SuggestedFeeRecipient: parent.Coinbase(),
+		SuggestedFeeRecipient: head.Coinbase(),
 		Withdrawals:           []*types.Withdrawal{},
-		BeaconRoot:            fakeBeaconBlockRoot(uint64(parent.Time())),
+		BeaconRoot:            fakeBeaconBlockRoot(uint64(head.Time())),
 	}
 
 	// Start payload build
@@ -290,8 +299,8 @@ func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Ha
 	// Update forkchoice
 	updateFc := engine.ForkchoiceStateV1{
 		HeadBlockHash:      envelope.ExecutionPayload.BlockHash,
-		SafeBlockHash:      safeBlockHash,
-		FinalizedBlockHash: finalizedBlockHash,
+		SafeBlockHash:      safeBlock.Hash(),
+		FinalizedBlockHash: finalizedBlock.Hash(),
 	}
 	_, err = s.rpcCallWithJWT(s.cfg.EngineRPC, "engine_forkchoiceUpdatedV3", []interface{}{updateFc, nil})
 	if err != nil {

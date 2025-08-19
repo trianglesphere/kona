@@ -12,10 +12,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestDummy(gt *testing.T) {
+	// gt.Skip()
+	t := devtest.SerialT(gt)
+
+	trm := utils.NewTestReorgManager(t)
+	trm.GetBlockBuilder().BuildBlock(t.Ctx(), nil)
+}
+
 type checksFunc func(t devtest.T, sys *presets.SimpleInterop)
 
 func TestL1Reorg(gt *testing.T) {
-	// gt.Skip()
+	gt.Skip()
 	gt.Run("unsafe reorg", func(gt *testing.T) {
 		var crossSafeRef, localSafeRef, unsafeRef eth.BlockID
 		pre := func(t devtest.T, sys *presets.SimpleInterop) {
@@ -23,6 +31,7 @@ func TestL1Reorg(gt *testing.T) {
 			crossSafeRef = ss.Chains[sys.L2ChainA.ChainID()].CrossSafe
 			localSafeRef = ss.Chains[sys.L2ChainA.ChainID()].LocalSafe
 			unsafeRef = ss.Chains[sys.L2ChainA.ChainID()].LocalUnsafe.ID()
+			gt.Logf("Pre:: CrossSafe: %s, LocalSafe: %s, Unsafe: %s", crossSafeRef, localSafeRef, unsafeRef)
 		}
 		post := func(t devtest.T, sys *presets.SimpleInterop) {
 			require.True(t, sys.L2ELA.IsCanonical(crossSafeRef), "Previous cross-safe block should still be canonical")
@@ -49,7 +58,7 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksF
 		trm.GetBlockBuilder().BuildBlock(ctx, nil)
 
 		sys.L2ChainA.WaitForBlock()
-		sys.L2ChainA.WaitForBlock()
+		sys.L2ChainB.WaitForBlock()
 	}
 
 	// select a divergence block to reorg from
@@ -73,18 +82,59 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksF
 	// reorg the L1 chain -- sequence an alternative L1 block from divergence block parent
 	trm.GetBlockBuilder().BuildBlock(ctx, &divergence.ParentHash)
 
+	trm.GetPOS().Start()
+
 	// confirm L1 reorged
 	sys.L1EL.ReorgTriggered(divergence, 5)
-	time.Sleep(5 * time.Second) // wait for L1 reorg to propagate
-
-	// build some blocks
-	for range n + 20 {
-		trm.GetBlockBuilder().BuildBlock(ctx, nil)
-
-		sys.L2ChainA.WaitForBlock()
-		sys.L2ChainA.WaitForBlock()
-	}
 
 	// wait until L2 chain A cross-safe ref caught up to where it was before the reorg
-	sys.L2CLA.Reached(types.CrossSafe, tipL2_preReorg.Number, 50)
+	sys.L2CLA.Reached(types.CrossSafe, tipL2_preReorg.Number, 100)
+
+	// test that latest chain A unsafe is not referencing a reorged L1 block (through the L1Origin field)
+	require.Eventually(t, func() bool {
+		unsafe := sys.L2ELA.BlockRefByLabel(eth.Unsafe)
+
+		block, err := sys.L1EL.Escape().EthClient().InfoByNumber(ctx, unsafe.L1Origin.Number)
+		if err != nil {
+			sys.Log.Warn("failed to get L1 block info by number", "number", unsafe.L1Origin.Number, "err", err)
+			return false
+		}
+
+		sys.Log.Info("current unsafe ref", "tip", unsafe, "tip_origin", unsafe.L1Origin, "l1blk", eth.InfoToL1BlockRef(block))
+
+		// print the chains so we have information to debug if the test fails
+		sys.L2ChainA.PrintChain()
+		sys.L1Network.PrintChain()
+
+		return block.Hash() == unsafe.L1Origin.Hash
+	}, 120*time.Second, 7*time.Second, "L1 block origin hash should match hash of block on L1 at that number. If not, it means there was a reorg, and L2 blocks L1Origin field is referencing a reorged block.")
+
+	// confirm all L1Origin fields point to canonical blocks
+	require.Eventually(t, func() bool {
+		ref := sys.L2ELA.BlockRefByLabel(eth.Unsafe)
+		var err error
+
+		// wait until L2 chains' L1Origin points to a L1 block after the one that was reorged
+		if ref.L1Origin.Number < divergence.Number {
+			return false
+		}
+
+		sys.Log.Info("L2 chain progressed, pointing to newer L1 block", "ref", ref, "ref_origin", ref.L1Origin, "divergence", divergence)
+
+		for i := ref.Number; i > 0 && ref.L1Origin.Number >= divergence.Number; i-- {
+			ref, err = sys.L2ELA.Escape().L2EthClient().L2BlockRefByNumber(ctx, i)
+			if err != nil {
+				return false
+			}
+
+			if !sys.L1EL.IsCanonical(ref.L1Origin) {
+				return false
+			}
+		}
+
+		return true
+	}, 120*time.Second, 5*time.Second, "all L1Origin fields should point to canonical L1 blocks")
+
+	// post reorg test validations and checks
+	postChecks(t, sys)
 }

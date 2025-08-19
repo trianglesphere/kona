@@ -14,6 +14,7 @@ type TestReorgManager struct {
 	t            devtest.CommonT
 	env          *env.DevnetEnv
 	blockBuilder *TestBlockBuilder
+	pos          *TestPOS
 }
 
 func NewTestReorgManager(t devtest.CommonT) *TestReorgManager {
@@ -63,7 +64,9 @@ func NewTestReorgManager(t devtest.CommonT) *TestReorgManager {
 		safeBlockDistance:      10,
 		finalizedBlockDistance: 20,
 	})
-	return &TestReorgManager{t, env, blockBuilder}
+
+	pos := NewTestPOS(t, rpcURL, blockBuilder)
+	return &TestReorgManager{t, env, blockBuilder, pos}
 }
 
 func (m *TestReorgManager) StopL1CL() {
@@ -103,4 +106,8 @@ func (m *TestReorgManager) StopL1CL() {
 
 func (m *TestReorgManager) GetBlockBuilder() *TestBlockBuilder {
 	return m.blockBuilder
+}
+
+func (m *TestReorgManager) GetPOS() *TestPOS {
+	return m.pos
 }
