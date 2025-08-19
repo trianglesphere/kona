@@ -36,7 +36,7 @@ where
         derived_ref_pair: DerivedRefPair,
         state: &mut ProcessorState,
     ) -> Result<(), ChainProcessorError> {
-        info!(
+        trace!(
             target: "supervisor::chain_processor",
             chain_id = self.chain_id,
             %derived_ref_pair,
