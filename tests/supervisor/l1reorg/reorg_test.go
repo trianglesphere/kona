@@ -47,9 +47,7 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksF
 	// sequence a few L1 and L2 blocks
 	for range n + 1 {
 		trm.GetBlockBuilder().BuildBlock(ctx, nil)
-
-		sys.L2ChainA.WaitForBlock()
-		sys.L2ChainB.WaitForBlock()
+		time.Sleep(time.Second * 10)
 	}
 
 	// select a divergence block to reorg from
@@ -70,13 +68,21 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksF
 
 	tipL2_preReorg := sys.L2ELA.BlockRefByLabel(eth.Unsafe)
 
+	sys.L2BatcherA.Stop()
+	sys.L2BatcherB.Stop()
+
 	// reorg the L1 chain -- sequence an alternative L1 block from divergence block parent
 	trm.GetBlockBuilder().BuildBlock(ctx, &divergence.ParentHash)
 
-	trm.GetPOS().Start()
-
 	// confirm L1 reorged
 	sys.L1EL.ReorgTriggered(divergence, 5)
+
+	trm.GetPOS().Start()
+
+	time.Sleep(20 * time.Second)
+
+	sys.L2BatcherA.Start()
+	sys.L2BatcherB.Start()
 
 	// wait until L2 chain A cross-safe ref caught up to where it was before the reorg
 	sys.L2CLA.Reached(types.CrossSafe, tipL2_preReorg.Number, 100)

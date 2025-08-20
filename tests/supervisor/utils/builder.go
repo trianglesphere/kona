@@ -12,12 +12,14 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
 	opeth "github.com/ethereum-optimism/optimism/op-service/eth"
+	"github.com/ethereum-optimism/optimism/op-service/testutils"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -58,6 +60,8 @@ type TestBlockBuilderConfig struct {
 type TestBlockBuilder struct {
 	t devtest.CommonT
 
+	withdrawalsIndex uint64
+
 	cfg       TestBlockBuilderConfig
 	ethClient *ethclient.Client
 }
@@ -69,7 +73,7 @@ func NewTestBlockBuilder(t devtest.CommonT, cfg TestBlockBuilderConfig) *TestBlo
 		return nil
 	}
 
-	return &TestBlockBuilder{t, cfg, ethClient}
+	return &TestBlockBuilder{t, 1001, cfg, ethClient}
 }
 
 func createJWT(secret []byte) (string, error) {
@@ -228,7 +232,7 @@ func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Ha
 		Timestamp:             uint64(newBlockTimestamp),
 		Random:                randomHash,
 		SuggestedFeeRecipient: head.Coinbase(),
-		Withdrawals:           []*types.Withdrawal{},
+		Withdrawals:           randomWithdrawals(s.withdrawalsIndex),
 		BeaconRoot:            fakeBeaconBlockRoot(uint64(head.Time())),
 	}
 
@@ -308,6 +312,8 @@ func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Ha
 		return
 	}
 
+	s.withdrawalsIndex += uint64(len(envelope.ExecutionPayload.Withdrawals))
+
 	s.t.Logf("Successfully built block %s:%d at timestamp %d", envelope.ExecutionPayload.BlockHash.Hex(), envelope.ExecutionPayload.Number, newBlockTimestamp)
 }
 
@@ -316,4 +322,18 @@ func fakeBeaconBlockRoot(time uint64) *common.Hash {
 	binary.LittleEndian.PutUint64(dat[:], time)
 	hash := crypto.Keccak256Hash(dat[:])
 	return &hash
+}
+
+func randomWithdrawals(startIndex uint64) []*types.Withdrawal {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	withdrawals := make([]*types.Withdrawal, r.Intn(4))
+	for i := 0; i < len(withdrawals); i++ {
+		withdrawals[i] = &types.Withdrawal{
+			Index:     startIndex + uint64(i),
+			Validator: r.Uint64() % 100_000_000, // 100 million fake validators
+			Address:   testutils.RandomAddress(r),
+			Amount:    uint64(r.Intn(50_000_000_000) + 1),
+		}
+	}
+	return withdrawals
 }

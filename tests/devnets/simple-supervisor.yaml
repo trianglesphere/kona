@@ -12,7 +12,7 @@ optimism_package:
             type: op-node
             image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node:v1.13.5
             log_level: debug
-            extra_params: [--experimental.sequencer-api=true]
+            extra_params: [--experimental.sequencer-api=true, --safedb.path=]
       network_params:
         network: "kurtosis"
         network_id: "2151908"
@@ -23,7 +23,7 @@ optimism_package:
         granite_time_offset: 0
         fund_dev_accounts: true
       batcher_params:
-        extra_params: [--data-availability-type=calldata]
+        extra_params: [--data-availability-type=calldata, --batch-type=1, --max-blocks-per-span-batch=10]
       proposer_params:
         game_type: 1
         proposal_interval: 10m
@@ -37,7 +37,7 @@ optimism_package:
             type: op-node
             image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node:v1.13.5
             log_level: debug
-            extra_params: [--experimental.sequencer-api=true]
+            extra_params: [--experimental.sequencer-api=true, --safedb.path=]
       network_params:
         network: "kurtosis"
         network_id: "2151909"
@@ -48,7 +48,7 @@ optimism_package:
         granite_time_offset: 0
         fund_dev_accounts: true
       batcher_params:
-        extra_params: [--data-availability-type=calldata]
+        extra_params: [--data-availability-type=calldata, --batch-type=1, --max-blocks-per-span-batch=10]
       proposer_params:
         game_type: 1
         proposal_interval: 10m
@@ -74,6 +74,8 @@ ethereum_package:
   participants:
     - el_type: geth
       cl_type: teku
+  additional_services:
+    - tx_fuzz
   network_params:
     preset: minimal
     genesis_delay: 5
