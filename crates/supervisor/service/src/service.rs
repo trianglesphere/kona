@@ -6,12 +6,7 @@ use alloy_rpc_client::RpcClient;
 use anyhow::Result;
 use jsonrpsee::client_transport::ws::Url;
 use kona_supervisor_core::{
-    ChainProcessor, CrossSafetyCheckerJob, ReorgHandler, Supervisor,
-    config::Config,
-    event::ChainEvent,
-    l1_watcher::L1Watcher,
-    safety_checker::{CrossSafePromoter, CrossUnsafePromoter},
-    syncnode::{Client, ManagedNode, ManagedNodeClient, ManagedNodeCommand},
+    config::Config, event::ChainEvent, l1_watcher::L1Watcher, safety_checker::{CrossSafePromoter, CrossUnsafePromoter}, syncnode::{Client, ManagedNode, ManagedNodeClient, ManagedNodeCommand}, ChainProcessor, CrossSafetyCheckerJob, LogIndexer, ReorgHandler, Supervisor
 };
 use kona_supervisor_storage::{ChainDb, ChainDbFactory, DerivationStorageWriter, LogStorageWriter};
 use std::{collections::HashMap, sync::Arc};
@@ -32,6 +27,7 @@ pub struct Service {
 
     database_factory: Arc<ChainDbFactory>,
     managed_nodes: HashMap<ChainId, Arc<ManagedNode<ChainDb, Client>>>,
+    log_indexers: HashMap<ChainId, Arc<LogIndexer<ManagedNode<ChainDb, Client>, ChainDb>>>,
 
     // channels
     chain_event_senders: HashMap<ChainId, mpsc::Sender<ChainEvent>>,
@@ -53,6 +49,7 @@ impl Service {
 
             database_factory,
             managed_nodes: HashMap::new(),
+            log_indexers: HashMap::new(),
 
             chain_event_senders: HashMap::new(),
             chain_event_receivers: HashMap::new(),
@@ -184,11 +181,14 @@ impl Service {
                 .ok_or(anyhow::anyhow!("no managed node sender found for chain {chain_id}"))?
                 .clone();
 
+            let log_indexer = Arc::new(LogIndexer::new(*chain_id, Some(managed_node.clone()), db.clone()));
+            self.log_indexers.insert(*chain_id, log_indexer.clone());
+
             // initialise chain processor for the chain.
             let mut processor = ChainProcessor::new(
                 self.config.clone(),
                 *chain_id,
-                managed_node.clone(),
+                log_indexer,
                 db,
                 managed_node_sender,
             );
