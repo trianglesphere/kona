@@ -33,8 +33,13 @@ pub struct Service {
     database_factory: Arc<ChainDbFactory>,
     managed_nodes: HashMap<ChainId, Arc<ManagedNode<ChainDb, Client>>>,
 
-    cancel_token: CancellationToken,
+    // channels
+    chain_event_senders: HashMap<ChainId, mpsc::Sender<ChainEvent>>,
+    chain_event_receivers: HashMap<ChainId, mpsc::Receiver<ChainEvent>>,
+    managed_node_senders: HashMap<ChainId, mpsc::Sender<ManagedNodeCommand>>,
+    managed_node_receivers: HashMap<ChainId, mpsc::Receiver<ManagedNodeCommand>>,
 
+    cancel_token: CancellationToken,
     join_set: JoinSet<Result<(), anyhow::Error>>,
 }
 
@@ -49,35 +54,34 @@ impl Service {
             database_factory,
             managed_nodes: HashMap::new(),
 
+            chain_event_senders: HashMap::new(),
+            chain_event_receivers: HashMap::new(),
+            managed_node_senders: HashMap::new(),
+            managed_node_receivers: HashMap::new(),
+
             cancel_token: CancellationToken::new(),
-            join_set: JoinSet::new(),
+            join_set: JoinSet::new(),            
         }
     }
 
     /// Initialises the Supervisor service.
     pub async fn initialise(&mut self) -> Result<()> {
-        let mut chain_event_receivers = HashMap::<ChainId, mpsc::Receiver<ChainEvent>>::new();
-        let mut chain_event_senders = HashMap::<ChainId, mpsc::Sender<ChainEvent>>::new();
-        let mut managed_node_receivers =
-            HashMap::<ChainId, mpsc::Receiver<ManagedNodeCommand>>::new();
-        let mut managed_node_senders = HashMap::<ChainId, mpsc::Sender<ManagedNodeCommand>>::new();
-
         // create sender and receiver channels for each chain
         for chain_id in self.config.rollup_config_set.rollups.keys() {
             let (chain_tx, chain_rx) = mpsc::channel::<ChainEvent>(1000);
-            chain_event_senders.insert(*chain_id, chain_tx);
-            chain_event_receivers.insert(*chain_id, chain_rx);
+            self.chain_event_senders.insert(*chain_id, chain_tx);
+            self.chain_event_receivers.insert(*chain_id, chain_rx);
 
             let (managed_node_tx, managed_node_rx) = mpsc::channel::<ManagedNodeCommand>(1000);
-            managed_node_senders.insert(*chain_id, managed_node_tx);
-            managed_node_receivers.insert(*chain_id, managed_node_rx);
+            self.managed_node_senders.insert(*chain_id, managed_node_tx);
+            self.managed_node_receivers.insert(*chain_id, managed_node_rx);
         }
 
         self.init_database().await?;
-        self.init_managed_nodes(managed_node_receivers, &chain_event_senders).await?;
-        self.init_chain_processor(chain_event_receivers, &managed_node_senders).await?;
-        self.init_l1_watcher(&chain_event_senders)?;
-        self.init_cross_safety_checker(&chain_event_senders).await?;
+        self.init_managed_nodes().await?;
+        self.init_chain_processor().await?;
+        self.init_l1_watcher()?;
+        self.init_cross_safety_checker().await?;
 
         // todo: run metric worker only if metrics are enabled
         self.init_rpc_server().await?;
@@ -103,11 +107,7 @@ impl Service {
         Ok(())
     }
 
-    async fn init_managed_nodes(
-        &mut self,
-        mut managed_node_receivers: HashMap<ChainId, mpsc::Receiver<ManagedNodeCommand>>,
-        chain_event_senders: &HashMap<ChainId, mpsc::Sender<ChainEvent>>,
-    ) -> Result<()> {
+    async fn init_managed_nodes(&mut self) -> Result<()> {
         info!(target: "supervisor::service", "Initialising managed nodes for all chains...");
 
         for config in self.config.l2_consensus_nodes_config.iter() {
@@ -124,7 +124,7 @@ impl Service {
             })?;
             let db = self.database_factory.get_db(chain_id)?;
 
-            let chain_event_sender = chain_event_senders
+            let chain_event_sender = self.chain_event_senders
                 .get(&chain_id)
                 .ok_or(anyhow::anyhow!("no chain event sender found for chain {chain_id}"))?
                 .clone();
@@ -149,7 +149,7 @@ impl Service {
             );
 
             // start managed node actor
-            let managed_node_receiver = managed_node_receivers
+            let managed_node_receiver = self.managed_node_receivers
                 .remove(&chain_id)
                 .ok_or(anyhow::anyhow!("no managed node receiver found for chain {chain_id}"))?;
 
@@ -169,11 +169,7 @@ impl Service {
         Ok(())
     }
 
-    async fn init_chain_processor(
-        &mut self,
-        mut chain_event_receivers: HashMap<ChainId, mpsc::Receiver<ChainEvent>>,
-        managed_node_senders: &HashMap<ChainId, mpsc::Sender<ManagedNodeCommand>>,
-    ) -> Result<()> {
+    async fn init_chain_processor(&mut self) -> Result<()> {
         info!(target: "supervisor::service", "Initialising chain processors for all chains...");
 
         for (chain_id, _) in self.config.rollup_config_set.rollups.iter() {
@@ -183,7 +179,7 @@ impl Service {
                 .get(chain_id)
                 .ok_or(anyhow::anyhow!("no managed node found for chain {chain_id}"))?;
 
-            let managed_node_sender = managed_node_senders
+            let managed_node_sender = self.managed_node_senders
                 .get(chain_id)
                 .ok_or(anyhow::anyhow!("no managed node sender found for chain {chain_id}"))?
                 .clone();
@@ -201,7 +197,7 @@ impl Service {
             processor = processor.with_metrics();
 
             // Start the chain processor actor.
-            let chain_event_receiver = chain_event_receivers
+            let chain_event_receiver = self.chain_event_receivers
                 .remove(chain_id)
                 .ok_or(anyhow::anyhow!("no chain event receiver found for chain {chain_id}"))?;
 
@@ -221,10 +217,7 @@ impl Service {
         Ok(())
     }
 
-    fn init_l1_watcher(
-        &mut self,
-        chain_event_senders: &HashMap<ChainId, mpsc::Sender<ChainEvent>>,
-    ) -> Result<()> {
+    fn init_l1_watcher(&mut self) -> Result<()> {
         info!(target: "supervisor::service", "Initialising L1 watcher...");
 
         let l1_rpc_url = Url::parse(&self.config.l1_rpc).map_err(|err| {
@@ -252,7 +245,7 @@ impl Service {
         // (does nothing if the reorg is not detected) then starts the L1 watcher streaming loop.
         let database_factory = self.database_factory.clone();
         let cancel_token = self.cancel_token.clone();
-        let event_senders = chain_event_senders.clone();
+        let event_senders = self.chain_event_senders.clone();
         let managed_nodes = self.managed_nodes.clone();
         self.join_set.spawn(async move {
             // Perform one-shot L1 consistency verification at startup to detect any
@@ -281,17 +274,14 @@ impl Service {
         Ok(())
     }
 
-    async fn init_cross_safety_checker(
-        &mut self,
-        chain_event_senders: &HashMap<ChainId, mpsc::Sender<ChainEvent>>,
-    ) -> Result<()> {
+    async fn init_cross_safety_checker(&mut self) -> Result<()> {
         info!(target: "supervisor::service", "Initialising cross safety checker...");
 
         for (&chain_id, config) in &self.config.rollup_config_set.rollups {
             let db = Arc::clone(&self.database_factory);
             let cancel = self.cancel_token.clone();
 
-            let chain_event_sender = chain_event_senders
+            let chain_event_sender = self.chain_event_senders
                 .get(&chain_id)
                 .ok_or(anyhow::anyhow!("no chain event sender found for chain {chain_id}"))?
                 .clone();

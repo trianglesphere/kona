@@ -185,7 +185,7 @@ mod tests {
 
         let writer = Arc::new(mockdb);
         let managed_node = Arc::new(mocknode);
-        let log_indexer = Arc::new(LogIndexer::new(1, managed_node, writer.clone()));
+        let log_indexer = Arc::new(LogIndexer::new(1, Some(managed_node), writer.clone()));
 
         let handler = UnsafeBlockHandler::new(1, Arc::new(mockvalidator), writer, log_indexer);
 
@@ -207,7 +207,7 @@ mod tests {
         let writer = Arc::new(mockdb);
         let managed_node = Arc::new(mocknode);
         // Create a mock log indexer
-        let log_indexer = Arc::new(LogIndexer::new(1, managed_node, writer.clone()));
+        let log_indexer = Arc::new(LogIndexer::new(1, Some(managed_node), writer.clone()));
 
         let handler = UnsafeBlockHandler::new(
             1, // chain_id
@@ -244,7 +244,7 @@ mod tests {
         let writer = Arc::new(mockdb);
         let managed_node = Arc::new(mocknode);
         // Create a mock log indexer
-        let log_indexer = Arc::new(LogIndexer::new(1, managed_node, writer.clone()));
+        let log_indexer = Arc::new(LogIndexer::new(1, Some(managed_node), writer.clone()));
 
         let handler = UnsafeBlockHandler::new(
             1, // chain_id
@@ -278,7 +278,7 @@ mod tests {
         let writer = Arc::new(mockdb);
         let managed_node = Arc::new(mocknode);
         // Create a mock log indexer
-        let log_indexer = Arc::new(LogIndexer::new(1, managed_node, writer.clone()));
+        let log_indexer = Arc::new(LogIndexer::new(1, Some(managed_node), writer.clone()));
 
         let handler = UnsafeBlockHandler::new(
             1, // chain_id
@@ -310,7 +310,7 @@ mod tests {
 
         let writer = Arc::new(mockdb);
         let managed_node = Arc::new(mocknode);
-        let log_indexer = Arc::new(LogIndexer::new(1, managed_node, writer.clone()));
+        let log_indexer = Arc::new(LogIndexer::new(1, Some(managed_node), writer.clone()));
 
         let handler = UnsafeBlockHandler::new(1, Arc::new(mockvalidator), writer, log_indexer);
 
