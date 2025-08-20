@@ -122,7 +122,7 @@ func TestNetworkConnectivity(gt *testing.T) {
 
 	out := kona_presets.NewMixedOpKona(t)
 
-	nodes := out.L2CLValidatorNodes()
+	nodes := out.L2CLNodes()
 	numNodes := len(nodes)
 
 	for _, node := range nodes {
