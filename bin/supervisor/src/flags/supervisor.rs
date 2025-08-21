@@ -62,6 +62,10 @@ pub struct SupervisorArgs {
     /// Port for the Supervisor RPC server to listen on.
     #[arg(long = "rpc.port", env = "RPC_PORT", default_value_t = 8545)]
     pub rpc_port: u16,
+
+    /// Enable the Supervisor Admin API.
+    #[arg(long = "rpc.enable-admin", env = "RPC_ENABLE_ADMIN", default_value_t = false)]
+    pub enable_admin_api: bool,
 }
 
 impl SupervisorArgs {
@@ -187,6 +191,7 @@ impl SupervisorArgs {
             l2_consensus_nodes_config: managed_nodes_config,
             datadir: self.datadir.clone(),
             rpc_addr,
+            enable_admin_api: self.enable_admin_api,
             dependency_set,
             rollup_config_set,
         })
@@ -314,6 +319,7 @@ mod tests {
             rollup_config_paths: PathBuf::from("dummy/rollup_config_*.json"),
             rpc_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let result = args.init_dependency_set().await;
@@ -345,6 +351,7 @@ mod tests {
             rollup_config_paths: PathBuf::from("dummy/rollup_config_*.json"),
             rpc_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let result = args.init_dependency_set().await;
@@ -370,6 +377,7 @@ mod tests {
             rollup_config_paths: PathBuf::from("dummy/rollup_config_*.json"),
             rpc_address: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let result = args.init_dependency_set().await;
@@ -443,6 +451,7 @@ mod tests {
             rollup_config_paths: dir.path().join("rollup-*.json"),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let configs = args.get_rollup_configs().await?;
@@ -464,6 +473,7 @@ mod tests {
             rollup_config_paths: dir.path().join("rollup-*.json"),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let configs = args.get_rollup_configs().await?;
@@ -488,6 +498,7 @@ mod tests {
             rollup_config_paths: dir.path().join("rollup-*.json"),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let result = args.get_rollup_configs().await;
@@ -507,6 +518,7 @@ mod tests {
             rollup_config_paths: PathBuf::from(""),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
         let result = args.get_rollup_configs().await;
         assert!(result.is_err());
@@ -526,6 +538,7 @@ mod tests {
             rollup_config_paths: PathBuf::from("dummy/rollup_config_*.json"),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
         let result = args.init_managed_nodes_config();
         assert!(result.is_err());
@@ -552,6 +565,7 @@ mod tests {
             rollup_config_paths: PathBuf::from(""),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let res = args.init_managed_nodes_config();
@@ -581,6 +595,7 @@ mod tests {
             rollup_config_paths: PathBuf::from(""),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let res = args.init_managed_nodes_config().unwrap();
@@ -601,6 +616,7 @@ mod tests {
             rollup_config_paths: PathBuf::from(""),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let err = args.init_managed_nodes_config().unwrap_err();
@@ -623,6 +639,7 @@ mod tests {
             rollup_config_paths: PathBuf::from(""),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         let err = args.init_managed_nodes_config().unwrap_err();
@@ -712,6 +729,7 @@ mod tests {
             rollup_config_paths: rollup_dir.path().join("rollup-*.json"),
             rpc_address: "127.0.0.1".parse().unwrap(),
             rpc_port: 8545,
+            enable_admin_api: false,
         };
 
         // This will fail at the L1 RPC call unless you mock RootProvider.

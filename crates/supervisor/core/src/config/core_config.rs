@@ -20,6 +20,9 @@ pub struct Config {
     /// The socket address for the RPC server to listen on.
     pub rpc_addr: SocketAddr,
 
+    /// Whether to enable the Supervisor Admin API.
+    pub enable_admin_api: bool,
+
     /// The loaded dependency set configuration.
     pub dependency_set: DependencySet,
 
@@ -97,6 +100,7 @@ mod tests {
             l2_consensus_nodes_config: vec![],
             datadir: PathBuf::new(),
             rpc_addr: SocketAddr::from(([127, 0, 0, 1], 8545)),
+            enable_admin_api: false,
             dependency_set: DependencySet {
                 dependencies: Default::default(),
                 override_message_expiry_window: Some(10),

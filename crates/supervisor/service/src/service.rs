@@ -370,18 +370,20 @@ impl Service {
     }
 
     async fn init_rpc_server(&mut self) -> Result<()> {
-        let (admin_tx, admin_rx) = mpsc::channel::<AdminRequest>(100);
-
         let supervisor_rpc = SupervisorRpc::new(self.supervisor.clone());
 
         let mut rpc_module = supervisor_rpc.into_rpc();
 
-        // todo: conditionally add the Admin RPC module if configured
-        let admin_rpc = AdminRpc::new(admin_tx.clone());
-        rpc_module
-            .merge(admin_rpc.into_rpc())
-            .map_err(|err| anyhow::anyhow!("failed to merge Admin RPC module: {err}"))?;
-        self.admin_receiver = Some(admin_rx);
+        if self.config.enable_admin_api {
+            info!(target: "supervisor::service", "Enabling Supervisor Admin API");
+
+            let (admin_tx, admin_rx) = mpsc::channel::<AdminRequest>(100);
+            let admin_rpc = AdminRpc::new(admin_tx.clone());
+            rpc_module
+                .merge(admin_rpc.into_rpc())
+                .map_err(|err| anyhow::anyhow!("failed to merge Admin RPC module: {err}"))?;
+            self.admin_receiver = Some(admin_rx);
+        }
 
         let rpc_addr = self.config.rpc_addr;
         let cancel_token = self.cancel_token.clone();
