@@ -1,13 +1,20 @@
 //! Contains the main Supervisor service runner.
 
 use alloy_primitives::ChainId;
-use alloy_provider::{RootProvider, network::Ethereum};
+use alloy_provider::{network::Ethereum, RootProvider};
 use alloy_rpc_client::RpcClient;
 use anyhow::Result;
 use jsonrpsee::client_transport::ws::Url;
 use kona_supervisor_core::{
-    config::Config, event::ChainEvent, l1_watcher::L1Watcher, safety_checker::{CrossSafePromoter, CrossUnsafePromoter}, syncnode::{Client, ManagedNode, ManagedNodeClient, ManagedNodeCommand}, ChainProcessor, CrossSafetyCheckerJob, LogIndexer, ReorgHandler, Supervisor
+    ChainProcessor, CrossSafetyCheckerJob, LogIndexer, ReorgHandler, Supervisor,
+    config::Config,
+    event::ChainEvent,
+    l1_watcher::L1Watcher,
+    rpc::{AdminError, AdminRequest, AdminRpc, SupervisorRpc},
+    safety_checker::{CrossSafePromoter, CrossUnsafePromoter},
+    syncnode::{Client, ClientConfig, ManagedNode, ManagedNodeClient, ManagedNodeCommand},
 };
+use kona_supervisor_rpc::{SupervisorAdminApiServer, SupervisorApiServer};
 use kona_supervisor_storage::{ChainDb, ChainDbFactory, DerivationStorageWriter, LogStorageWriter};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{sync::mpsc, task::JoinSet, time::Duration};
@@ -18,6 +25,9 @@ use crate::actors::{
     ChainProcessorActor, ManagedNodeActor, MetricWorker, SupervisorActor, SupervisorRpcActor,
 };
 
+// simplify long type signature
+type ManagedLogIndexer = LogIndexer<ManagedNode<ChainDb, Client>, ChainDb>;
+
 /// The main service structure for the Kona
 /// [`SupervisorService`](`kona_supervisor_core::SupervisorService`). Orchestrates the various
 /// components of the supervisor.
@@ -25,15 +35,17 @@ use crate::actors::{
 pub struct Service {
     config: Arc<Config>,
 
+    supervisor: Arc<Supervisor<ManagedNode<ChainDb, Client>>>,
     database_factory: Arc<ChainDbFactory>,
     managed_nodes: HashMap<ChainId, Arc<ManagedNode<ChainDb, Client>>>,
-    log_indexers: HashMap<ChainId, Arc<LogIndexer<ManagedNode<ChainDb, Client>, ChainDb>>>,
+    log_indexers: HashMap<ChainId, Arc<ManagedLogIndexer>>,
 
     // channels
     chain_event_senders: HashMap<ChainId, mpsc::Sender<ChainEvent>>,
     chain_event_receivers: HashMap<ChainId, mpsc::Receiver<ChainEvent>>,
     managed_node_senders: HashMap<ChainId, mpsc::Sender<ManagedNodeCommand>>,
     managed_node_receivers: HashMap<ChainId, mpsc::Receiver<ManagedNodeCommand>>,
+    admin_receiver: Option<mpsc::Receiver<AdminRequest>>,
 
     cancel_token: CancellationToken,
     join_set: JoinSet<Result<(), anyhow::Error>>,
@@ -41,12 +53,15 @@ pub struct Service {
 
 impl Service {
     /// Creates a new Supervisor service instance.
-    pub fn new(config: Config) -> Self {
+    pub fn new(cfg: Config) -> Self {
+        let config = Arc::new(cfg);
         let database_factory = Arc::new(ChainDbFactory::new(config.datadir.clone()).with_metrics());
+        let supervisor = Arc::new(Supervisor::new(config.clone(), database_factory.clone()));
 
         Self {
-            config: Arc::new(config),
+            config,
 
+            supervisor,
             database_factory,
             managed_nodes: HashMap::new(),
             log_indexers: HashMap::new(),
@@ -55,9 +70,10 @@ impl Service {
             chain_event_receivers: HashMap::new(),
             managed_node_senders: HashMap::new(),
             managed_node_receivers: HashMap::new(),
+            admin_receiver: None,
 
             cancel_token: CancellationToken::new(),
-            join_set: JoinSet::new(),            
+            join_set: JoinSet::new(),
         }
     }
 
@@ -75,8 +91,8 @@ impl Service {
         }
 
         self.init_database().await?;
-        self.init_managed_nodes().await?;
         self.init_chain_processor().await?;
+        self.init_managed_nodes().await?;
         self.init_l1_watcher()?;
         self.init_cross_safety_checker().await?;
 
@@ -104,64 +120,82 @@ impl Service {
         Ok(())
     }
 
+    async fn init_managed_node(&mut self, config: &ClientConfig) -> Result<()> {
+        let url = Url::parse(&self.config.l1_rpc).map_err(|err| {
+            error!(target: "supervisor::service", %err, "Failed to parse L1 RPC URL");
+            anyhow::anyhow!("failed to parse L1 RPC URL: {err}")
+        })?;
+        let provider = RootProvider::<Ethereum>::new_http(url);
+        let client = Arc::new(Client::new(config.clone()));
+
+        let chain_id = client.chain_id().await.map_err(|err| {
+            error!(target: "supervisor::service", %err, "Failed to get chain ID from client");
+            anyhow::anyhow!("failed to get chain ID from client: {err}")
+        })?;
+
+        // todo: check if the chain ID is supported by the supervisor
+
+        let db = self.database_factory.get_db(chain_id)?;
+
+        let chain_event_sender = self
+            .chain_event_senders
+            .get(&chain_id)
+            .ok_or(anyhow::anyhow!("no chain event sender found for chain {chain_id}"))?
+            .clone();
+
+        let managed_node =
+            ManagedNode::<ChainDb, Client>::new(client.clone(), db, provider, chain_event_sender);
+
+        if self.managed_nodes.contains_key(&chain_id) {
+            warn!(target: "supervisor::service", %chain_id, "Managed node for chain already exists, skipping initialization");
+            return Ok(());
+        }
+
+        let managed_node = Arc::new(managed_node);
+        self.managed_nodes.insert(chain_id, managed_node.clone());
+        info!(target: "supervisor::service",
+             chain_id,
+            "Managed node for chain initialized successfully",
+        );
+
+        // set the managed node in log indexer
+        let log_indexer = self
+            .log_indexers
+            .get(&chain_id)
+            .ok_or(anyhow::anyhow!("no log indexer found for chain {chain_id}"))?
+            .clone();
+        log_indexer.set_block_provider(managed_node.clone()).await;
+
+        // add the managed node to the supervisor service
+        self.supervisor.add_managed_node(chain_id, managed_node.clone()).await;
+
+        // start managed node actor
+        let managed_node_receiver = self
+            .managed_node_receivers
+            .remove(&chain_id)
+            .ok_or(anyhow::anyhow!("no managed node receiver found for chain {chain_id}"))?;
+
+        let cancel_token = self.cancel_token.clone();
+        self.join_set.spawn(async move {
+            if let Err(err) =
+                ManagedNodeActor::new(client, managed_node, managed_node_receiver, cancel_token)
+                    .start()
+                    .await
+            {
+                Err(anyhow::anyhow!(err))
+            } else {
+                Ok(())
+            }
+        });
+        Ok(())
+    }
+
     async fn init_managed_nodes(&mut self) -> Result<()> {
         info!(target: "supervisor::service", "Initialising managed nodes for all chains...");
 
-        for config in self.config.l2_consensus_nodes_config.iter() {
-            let url = Url::parse(&self.config.l1_rpc).map_err(|err| {
-                error!(target: "supervisor::service", %err, "Failed to parse L1 RPC URL");
-                anyhow::anyhow!("failed to parse L1 RPC URL: {err}")
-            })?;
-            let provider = RootProvider::<Ethereum>::new_http(url);
-            let client = Arc::new(Client::new(config.clone()));
-
-            let chain_id = client.chain_id().await.map_err(|err| {
-                error!(target: "supervisor::service", %err, "Failed to get chain ID from client");
-                anyhow::anyhow!("failed to get chain ID from client: {err}")
-            })?;
-            let db = self.database_factory.get_db(chain_id)?;
-
-            let chain_event_sender = self.chain_event_senders
-                .get(&chain_id)
-                .ok_or(anyhow::anyhow!("no chain event sender found for chain {chain_id}"))?
-                .clone();
-
-            let managed_node = ManagedNode::<ChainDb, Client>::new(
-                client.clone(),
-                db,
-                provider,
-                chain_event_sender,
-            );
-
-            if self.managed_nodes.contains_key(&chain_id) {
-                warn!(target: "supervisor::service", %chain_id, "Managed node for chain already exists, skipping initialization");
-                continue;
-            }
-
-            let managed_node = Arc::new(managed_node);
-            self.managed_nodes.insert(chain_id, managed_node.clone());
-            info!(target: "supervisor::service",
-                 chain_id,
-                "Managed node for chain initialized successfully",
-            );
-
-            // start managed node actor
-            let managed_node_receiver = self.managed_node_receivers
-                .remove(&chain_id)
-                .ok_or(anyhow::anyhow!("no managed node receiver found for chain {chain_id}"))?;
-
-            let cancel_token = self.cancel_token.clone();
-            self.join_set.spawn(async move {
-                if let Err(err) =
-                    ManagedNodeActor::new(client, managed_node, managed_node_receiver, cancel_token)
-                        .start()
-                        .await
-                {
-                    Err(anyhow::anyhow!(err))
-                } else {
-                    Ok(())
-                }
-            });
+        let configs = self.config.l2_consensus_nodes_config.clone();
+        for config in configs.iter() {
+            self.init_managed_node(config).await?;
         }
         Ok(())
     }
@@ -171,17 +205,15 @@ impl Service {
 
         for (chain_id, _) in self.config.rollup_config_set.rollups.iter() {
             let db = self.database_factory.get_db(*chain_id)?;
-            let managed_node = self
-                .managed_nodes
-                .get(chain_id)
-                .ok_or(anyhow::anyhow!("no managed node found for chain {chain_id}"))?;
-
-            let managed_node_sender = self.managed_node_senders
+            
+            let managed_node_sender = self
+                .managed_node_senders
                 .get(chain_id)
                 .ok_or(anyhow::anyhow!("no managed node sender found for chain {chain_id}"))?
                 .clone();
 
-            let log_indexer = Arc::new(LogIndexer::new(*chain_id, Some(managed_node.clone()), db.clone()));
+            let log_indexer =
+                Arc::new(LogIndexer::new(*chain_id, None, db.clone()));
             self.log_indexers.insert(*chain_id, log_indexer.clone());
 
             // initialise chain processor for the chain.
@@ -197,7 +229,8 @@ impl Service {
             processor = processor.with_metrics();
 
             // Start the chain processor actor.
-            let chain_event_receiver = self.chain_event_receivers
+            let chain_event_receiver = self
+                .chain_event_receivers
                 .remove(chain_id)
                 .ok_or(anyhow::anyhow!("no chain event receiver found for chain {chain_id}"))?;
 
@@ -281,7 +314,8 @@ impl Service {
             let db = Arc::clone(&self.database_factory);
             let cancel = self.cancel_token.clone();
 
-            let chain_event_sender = self.chain_event_senders
+            let chain_event_sender = self
+                .chain_event_senders
                 .get(&chain_id)
                 .ok_or(anyhow::anyhow!("no chain event sender found for chain {chain_id}"))?
                 .clone();
@@ -337,16 +371,24 @@ impl Service {
     }
 
     async fn init_rpc_server(&mut self) -> Result<()> {
-        let supervisor = Arc::new(Supervisor::new(
-            self.config.clone(),
-            self.database_factory.clone(),
-            self.managed_nodes.clone(),
-        ));
+        let (admin_tx, admin_rx) = mpsc::channel::<AdminRequest>(100);
+
+        let supervisor_rpc = SupervisorRpc::new(self.supervisor.clone());
+
+        let mut rpc_module = supervisor_rpc.into_rpc();
+
+        // todo: conditionally add the Admin RPC module if configured
+        let admin_rpc = AdminRpc::new(admin_tx.clone());
+        rpc_module
+            .merge(admin_rpc.into_rpc())
+            .map_err(|err| anyhow::anyhow!("failed to merge Admin RPC module: {err}"))?;
+        self.admin_receiver = Some(admin_rx);
+
         let rpc_addr = self.config.rpc_addr;
         let cancel_token = self.cancel_token.clone();
         self.join_set.spawn(async move {
             if let Err(err) =
-                SupervisorRpcActor::new(rpc_addr, supervisor, cancel_token).start().await
+                SupervisorRpcActor::new(rpc_addr, rpc_module, cancel_token).start().await
             {
                 Err(anyhow::anyhow!(err))
             } else {
@@ -361,22 +403,52 @@ impl Service {
     pub async fn run(&mut self) -> Result<()> {
         self.initialise().await?;
 
-        while let Some(res) = self.join_set.join_next().await {
-            match res {
-                Ok(Ok(_)) => {
-                    info!(target: "supervisor::service", "Task completed successfully.");
+        loop {
+            tokio::select! {
+                // Admin requests (if admin_receiver was initialized)
+                maybe_req = async {
+                    if let Some(rx) = self.admin_receiver.as_mut() {
+                        rx.recv().await
+                    } else {
+                        // if no receiver present, never produce a value
+                        futures::future::pending::<Option<AdminRequest>>().await
+                    }
+                } => {
+                    if let Some(req) = maybe_req {
+                        match req {
+                            AdminRequest::AddL2Rpc { cfg, resp } => {
+                                // attempt to add the managed node using existing init path
+                                let res = match self.init_managed_node(&cfg).await {
+                                    Ok(()) => Ok(()),
+                                    Err(err) => {
+                                        Err(AdminError::ServiceError(err.to_string()))
+                                    }
+                                };
+
+                                let _ = resp.send(res);
+                            }
+                        }
+                    }
                 }
-                Ok(Err(err)) => {
-                    error!(target: "supervisor::service", %err, "A task encountered an error.");
-                    // A task panicked, also trigger cancellation
-                    self.cancel_token.cancel();
-                    return Err(anyhow::anyhow!("A service task failed: {}", err));
-                }
-                Err(err) => {
-                    error!(target: "supervisor::service", %err, "A task encountered an error.");
-                    // A task panicked, also trigger cancellation
-                    self.cancel_token.cancel();
-                    return Err(anyhow::anyhow!("A service task failed: {}", err));
+
+                // Supervisor task completions / failures
+                opt = self.join_set.join_next() => {
+                    match opt {
+                        Some(Ok(Ok(_))) => {
+                            info!(target: "supervisor::service", "Task completed successfully.");
+                        }
+                        Some(Ok(Err(err))) => {
+                            error!(target: "supervisor::service", %err, "A task encountered an error.");
+                            self.cancel_token.cancel();
+                            return Err(anyhow::anyhow!("A service task failed: {}", err));
+                        }
+                        Some(Err(err)) => {
+                            error!(target: "supervisor::service", %err, "A task encountered an error.");
+                            self.cancel_token.cancel();
+                            return Err(anyhow::anyhow!("A service task failed: {}", err));
+                        }
+                        None => break, // all tasks finished
+                    }
                 }
             }
         }

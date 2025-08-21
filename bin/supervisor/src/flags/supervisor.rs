@@ -1,5 +1,6 @@
 use alloy_network::Ethereum;
 use alloy_provider::{Provider, RootProvider};
+use alloy_rpc_types_engine::JwtSecret;
 use anyhow::{Context as _, Ok, Result, anyhow};
 use clap::Args;
 use glob::glob;
@@ -158,9 +159,17 @@ impl SupervisorArgs {
             .first()
             .ok_or_else(|| anyhow::anyhow!("No JWT secrets provided"))?;
         for (i, rpc_url) in self.l2_consensus_nodes.iter().enumerate() {
-            let secret = self.l2_consensus_jwt_secret.get(i).unwrap_or(default_secret);
+            let secret_path = self.l2_consensus_jwt_secret.get(i).unwrap_or(default_secret);
 
-            managed_nodes.push(ClientConfig { url: rpc_url.clone(), jwt_path: secret.clone() });
+            let secret = std::fs::read_to_string(secret_path).map_err(|err| {
+                anyhow::anyhow!("Failed to read JWT secret from '{}': {}", secret_path, err)
+            })?;
+
+            let jwt_secret = JwtSecret::from_hex(secret).map_err(|err| {
+                anyhow::anyhow!("Failed to parse JWT secret from '{}': {}", secret_path, err)
+            })?;
+
+            managed_nodes.push(ClientConfig { url: rpc_url.clone(), jwt_secret });
         }
         Ok(managed_nodes)
     }

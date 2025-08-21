@@ -94,9 +94,10 @@ mod tests {
     use alloy_primitives::{B256, ChainId};
     use kona_interop::{DerivedRefPair, InteropValidationError};
     use kona_protocol::BlockInfo;
-    use kona_supervisor_core::{syncnode::{
-        BlockProvider, ManagedNodeCommand, ManagedNodeDataProvider, ManagedNodeError,
-    }, LogIndexer};
+    use kona_supervisor_core::{
+        LogIndexer,
+        syncnode::{BlockProvider, ManagedNodeCommand, ManagedNodeDataProvider, ManagedNodeError},
+    };
     use kona_supervisor_storage::{
         DerivationStorageReader, DerivationStorageWriter, HeadRefStorageWriter, LogStorageReader,
         LogStorageWriter, StorageError, StorageRewinder,
@@ -239,13 +240,8 @@ mod tests {
         let db = Arc::new(mock_db);
         let log_indexer = LogIndexer::new(1, Some(Arc::new(mock_node)), db.clone());
 
-        let processor = ChainProcessor::new(
-            Arc::new(validator),
-            1,
-            Arc::new(log_indexer),
-            db,
-            mn_sender,
-        );
+        let processor =
+            ChainProcessor::new(Arc::new(validator), 1, Arc::new(log_indexer), db, mn_sender);
 
         let cancel_token = CancellationToken::new();
         let (tx, rx) = mpsc::channel(1);
@@ -288,13 +284,8 @@ mod tests {
         let db = Arc::new(mock_db);
         let log_indexer = LogIndexer::new(1, Some(Arc::new(mock_node)), db.clone());
 
-        let processor = ChainProcessor::new(
-            Arc::new(validator),
-            1,
-            Arc::new(log_indexer),
-            db,
-            mn_sender,
-        );
+        let processor =
+            ChainProcessor::new(Arc::new(validator), 1, Arc::new(log_indexer), db, mn_sender);
 
         let cancel_token = CancellationToken::new();
         let (tx, rx) = mpsc::channel::<ChainEvent>(1); // No sender, so channel is closed
@@ -316,13 +307,8 @@ mod tests {
         let db = Arc::new(mock_db);
         let log_indexer = LogIndexer::new(1, Some(Arc::new(mock_node)), db.clone());
 
-        let processor = ChainProcessor::new(
-            Arc::new(validator),
-            1,
-            Arc::new(log_indexer),
-            db,
-            mn_sender,
-        );
+        let processor =
+            ChainProcessor::new(Arc::new(validator), 1, Arc::new(log_indexer), db, mn_sender);
 
         let cancel_token = CancellationToken::new();
         let (_tx, rx) = mpsc::channel::<ChainEvent>(1);

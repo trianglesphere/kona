@@ -38,7 +38,12 @@ where
     ///   receipts.
     /// - `log_storage`: Shared reference to the storage layer for persisting parsed logs.
     pub fn new(chain_id: ChainId, block_provider: Option<Arc<P>>, log_storage: Arc<S>) -> Self {
-        Self { chain_id, block_provider: Mutex::new(block_provider), log_storage, is_catch_up_running: Mutex::new(false) }
+        Self {
+            chain_id,
+            block_provider: Mutex::new(block_provider),
+            log_storage,
+            is_catch_up_running: Mutex::new(false),
+        }
     }
 
     /// Replace the block provider
@@ -87,7 +92,7 @@ where
 
         while current_number < block.number {
             let provider = {
-               let guard = self.block_provider.lock().await;
+                let guard = self.block_provider.lock().await;
                 guard.as_ref().ok_or(LogIndexerError::NoBlockProvider)?.clone()
             };
 
@@ -348,7 +353,8 @@ mod tests {
 
         mock_db.expect_store_block_logs().times(5).returning(move |_, _| Ok(()));
 
-        let indexer = Arc::new(LogIndexer::new(1, Some(Arc::new(mock_provider)), Arc::new(mock_db)));
+        let indexer =
+            Arc::new(LogIndexer::new(1, Some(Arc::new(mock_provider)), Arc::new(mock_db)));
 
         indexer.clone().sync_logs(target_block);
 
