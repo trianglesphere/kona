@@ -154,12 +154,12 @@ impl SupervisorArgs {
     /// initialise and return the managed nodes configuration.
     pub fn init_managed_nodes_config(&self) -> Result<Vec<ClientConfig>> {
         let mut managed_nodes = Vec::new();
-        let default_secret = self
+        let default_secret_path = self
             .l2_consensus_jwt_secret
             .first()
             .ok_or_else(|| anyhow::anyhow!("No JWT secrets provided"))?;
         for (i, rpc_url) in self.l2_consensus_nodes.iter().enumerate() {
-            let secret_path = self.l2_consensus_jwt_secret.get(i).unwrap_or(default_secret);
+            let secret_path = self.l2_consensus_jwt_secret.get(i).unwrap_or(default_secret_path);
 
             let secret = std::fs::read_to_string(secret_path).map_err(|err| {
                 anyhow::anyhow!("Failed to read JWT secret from '{}': {}", secret_path, err)
@@ -530,6 +530,103 @@ mod tests {
         let result = args.init_managed_nodes_config();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No JWT secrets provided"),);
+    }
+
+    #[test]
+    fn test_init_managed_nodes_config_success_single() {
+        let dir = tempdir().unwrap();
+        let secret_path = dir.path().join("s1");
+        std::fs::write(
+            &secret_path,
+            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+
+        let args = SupervisorArgs {
+            l1_rpc: "dummy".into(),
+            l2_consensus_nodes: vec!["http://node1:8551".into()],
+            l2_consensus_jwt_secret: vec![secret_path.to_string_lossy().into()],
+            datadir: PathBuf::from("dummy"),
+            datadir_sync_endpoint: None,
+            dependency_set: PathBuf::from("dummy.json"),
+            rollup_config_paths: PathBuf::from(""),
+            rpc_address: "127.0.0.1".parse().unwrap(),
+            rpc_port: 8545,
+        };
+
+        let res = args.init_managed_nodes_config();
+        assert!(res.is_ok());
+        let cfgs = res.unwrap();
+        assert_eq!(cfgs.len(), 1);
+        assert_eq!(cfgs[0].url, "http://node1:8551");
+    }
+
+    #[test]
+    fn test_init_managed_nodes_config_multiple_nodes_single_secret_uses_default() {
+        let dir = tempdir().unwrap();
+        let secret_path = dir.path().join("s1");
+        std::fs::write(
+            &secret_path,
+            "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+
+        let args = SupervisorArgs {
+            l1_rpc: "dummy".into(),
+            l2_consensus_nodes: vec!["http://n1:8551".into(), "http://n2:8551".into()],
+            l2_consensus_jwt_secret: vec![secret_path.to_string_lossy().into()],
+            datadir: PathBuf::from("dummy"),
+            datadir_sync_endpoint: None,
+            dependency_set: PathBuf::from("dummy.json"),
+            rollup_config_paths: PathBuf::from(""),
+            rpc_address: "127.0.0.1".parse().unwrap(),
+            rpc_port: 8545,
+        };
+
+        let res = args.init_managed_nodes_config().unwrap();
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0].url, "http://n1:8551");
+        assert_eq!(res[1].url, "http://n2:8551");
+    }
+
+    #[test]
+    fn test_init_managed_nodes_config_missing_secret_file() {
+        let args = SupervisorArgs {
+            l1_rpc: "dummy".into(),
+            l2_consensus_nodes: vec!["http://node1:8551".into()],
+            l2_consensus_jwt_secret: vec!["/non/existent/path".into()],
+            datadir: PathBuf::from("dummy"),
+            datadir_sync_endpoint: None,
+            dependency_set: PathBuf::from("dummy.json"),
+            rollup_config_paths: PathBuf::from(""),
+            rpc_address: "127.0.0.1".parse().unwrap(),
+            rpc_port: 8545,
+        };
+
+        let err = args.init_managed_nodes_config().unwrap_err();
+        assert!(err.to_string().contains("Failed to read JWT secret"));
+    }
+
+    #[test]
+    fn test_init_managed_nodes_config_invalid_jwt_hex() {
+        let dir = tempdir().unwrap();
+        let secret_path = dir.path().join("bad");
+        std::fs::write(&secret_path, "not-hex").unwrap();
+
+        let args = SupervisorArgs {
+            l1_rpc: "dummy".into(),
+            l2_consensus_nodes: vec!["http://node1:8551".into()],
+            l2_consensus_jwt_secret: vec![secret_path.to_string_lossy().into()],
+            datadir: PathBuf::from("dummy"),
+            datadir_sync_endpoint: None,
+            dependency_set: PathBuf::from("dummy.json"),
+            rollup_config_paths: PathBuf::from(""),
+            rpc_address: "127.0.0.1".parse().unwrap(),
+            rpc_port: 8545,
+        };
+
+        let err = args.init_managed_nodes_config().unwrap_err();
+        assert!(err.to_string().contains("Failed to parse JWT secret"));
     }
 
     #[tokio::test]

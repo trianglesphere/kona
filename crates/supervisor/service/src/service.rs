@@ -1,7 +1,7 @@
 //! Contains the main Supervisor service runner.
 
 use alloy_primitives::ChainId;
-use alloy_provider::{network::Ethereum, RootProvider};
+use alloy_provider::{RootProvider, network::Ethereum};
 use alloy_rpc_client::RpcClient;
 use anyhow::Result;
 use jsonrpsee::client_transport::ws::Url;
@@ -205,15 +205,14 @@ impl Service {
 
         for (chain_id, _) in self.config.rollup_config_set.rollups.iter() {
             let db = self.database_factory.get_db(*chain_id)?;
-            
+
             let managed_node_sender = self
                 .managed_node_senders
                 .get(chain_id)
                 .ok_or(anyhow::anyhow!("no managed node sender found for chain {chain_id}"))?
                 .clone();
 
-            let log_indexer =
-                Arc::new(LogIndexer::new(*chain_id, None, db.clone()));
+            let log_indexer = Arc::new(LogIndexer::new(*chain_id, None, db.clone()));
             self.log_indexers.insert(*chain_id, log_indexer.clone());
 
             // initialise chain processor for the chain.

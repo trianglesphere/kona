@@ -1,7 +1,6 @@
 use alloy_eips::BlockNumHash;
 use alloy_primitives::{B256, Bytes, ChainId, keccak256};
 use async_trait::async_trait;
-use tokio::sync::Mutex;
 use core::fmt::Debug;
 use kona_interop::{
     DependencySet, ExecutingDescriptor, InteropValidator, OutputRootWithChain, SUPER_ROOT_VERSION,
@@ -16,6 +15,7 @@ use kona_supervisor_storage::{
 use kona_supervisor_types::{SuperHead, parse_access_list};
 use op_alloy_rpc_types::SuperchainDAError;
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::{error, warn};
 
 use crate::{
@@ -107,10 +107,7 @@ where
 {
     /// Creates a new [`Supervisor`] instance.
     #[allow(clippy::new_without_default, clippy::missing_const_for_fn)]
-    pub fn new(
-        config: Arc<Config>,
-        database_factory: Arc<ChainDbFactory>,
-    ) -> Self {
+    pub fn new(config: Arc<Config>, database_factory: Arc<ChainDbFactory>) -> Self {
         Self { config, database_factory, managed_nodes: Mutex::new(HashMap::new()) }
     }
 
