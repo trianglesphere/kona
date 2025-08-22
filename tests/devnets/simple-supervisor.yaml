@@ -62,7 +62,7 @@ optimism_package:
       image: kona-supervisor:local
       superchain: superchain
       extra_env_vars:
-        RUST_LOG: "supervisor=info,supervisor::reorg_handler=trace"
+        RUST_LOG: "supervisor=info"
   test-sequencers:
     sequencer:
       enabled: true
