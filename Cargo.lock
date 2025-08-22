@@ -4994,6 +4994,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kona-providers-local"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-provider",
+ "async-trait",
+ "kona-derive",
+ "kona-genesis",
+ "kona-protocol",
+ "kona-providers-alloy",
+ "lru 0.16.0",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "kona-registry"
 version = "0.4.5"
 dependencies = [
@@ -8274,6 +8294,48 @@ dependencies = [
 [[package]]
 name = "rollup"
 version = "0.0.0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-provider",
+ "anyhow",
+ "kona-node-service",
+ "kona-providers-alloy",
+ "kona-providers-local",
+ "reth-codecs",
+ "reth-db",
+ "reth-db-api",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+]
+
+[[package]]
+name = "rollup-service"
+version = "0.1.0"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-types",
+ "anyhow",
+ "arbitrary",
+ "async-trait",
+ "dirs",
+ "futures",
+ "kona-derive",
+ "kona-node-service",
+ "kona-protocol",
+ "kona-providers-alloy",
+ "op-alloy-consensus",
+ "op-alloy-network",
+ "rstest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
+ "url",
+]
 
 [[package]]
 name = "route-recognizer"
@@ -9936,6 +9998,7 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
+ "serde",
 ]
 
 [[package]]

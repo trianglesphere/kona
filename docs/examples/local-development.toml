@@ -1,0 +1,76 @@
+# Kona Rollup Binary - Local Development Configuration
+#
+# This configuration is optimized for local development and testing.
+# Assumes you have local L1 and L2 nodes running (e.g., via Docker).
+#
+# Usage: ./rollup --config local-development.toml
+
+[general]
+# Local testnet chain ID (commonly used for local development)
+chain_id = 31337
+
+# Local data directory
+data_dir = "./dev-data"
+
+# Maximum verbosity for development
+log_level = "trace"
+
+# Different ports to avoid conflicts
+metrics_port = 9092
+health_port = 8082
+
+[l1]
+# Local Ethereum node (e.g., Hardhat, Ganache, or local Geth)
+rpc_url = "http://localhost:8545"
+
+# WebSocket endpoint (if your local node supports it)
+# ws_url = "ws://localhost:8546"
+
+# No beacon API for local development
+# beacon_url = ""
+
+[l2]
+# Local L2 node (if running separate L2 for testing)
+rpc_url = "http://localhost:9545"
+
+# Local L2 WebSocket
+# ws_url = "ws://localhost:9546"
+
+[kona]
+# Minimal cache for development (saves memory)
+buffer_size = 100
+
+# Minimal reorg depth for local testing
+reorg_depth = 10
+
+# Low concurrency for local endpoints
+max_concurrent_requests = 3
+
+# Small batches for easier debugging
+batch_size = 10
+
+# Maximum verbosity for debugging
+log_level = "trace"
+
+# Short timeout for local development
+notification_timeout = 10
+
+[reth]
+# No external peers for local development
+max_peers = 0
+max_outbound_peers = 0
+max_inbound_peers = 0
+
+# Unique ports for local development
+discovery_port = 30305
+listener_port = 30305
+
+# Unique Engine API ports
+engine_http_port = 8555
+engine_ws_port = 8556
+
+# Maximum verbosity for debugging
+log_level = "trace"
+
+# Disable P2P networking for local development
+no_p2p = true

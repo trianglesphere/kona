@@ -1,0 +1,77 @@
+# Kona Rollup Binary - Testnet (OP Goerli) Configuration
+#
+# This configuration is optimized for testnet development and testing.
+# Uses OP Goerli testnet for safe experimentation.
+#
+# Usage: ./rollup --config testnet-goerli.toml
+
+[general]
+# Chain ID for OP Goerli testnet
+chain_id = 420
+
+# Data directory for testnet data
+data_dir = "/opt/rollup/goerli/data"
+
+# More verbose logging for development
+log_level = "debug"
+
+# Different ports to avoid conflicts with mainnet
+metrics_port = 9091
+health_port = 8081
+
+[l1]
+# Ethereum Goerli RPC endpoint
+# Replace YOUR_API_KEY with your actual API key
+rpc_url = "https://eth-goerli.alchemyapi.io/v2/YOUR_API_KEY"
+
+# WebSocket endpoint for Goerli
+ws_url = "wss://eth-goerli.alchemyapi.io/v2/YOUR_API_KEY"
+
+# Goerli beacon chain (optional)
+beacon_url = "https://goerli-beacon-api.publicnode.com"
+
+[l2]
+# OP Goerli RPC endpoint
+rpc_url = "https://goerli.optimism.io"
+
+# OP Goerli WebSocket endpoint
+ws_url = "wss://ws-goerli.optimism.io"
+
+[kona]
+# Smaller cache for testnet (less memory usage)
+buffer_size = 500
+
+# Shorter reorg depth for testnet
+reorg_depth = 32
+
+# Lower concurrency for testnet endpoints
+max_concurrent_requests = 5
+
+# Smaller batches for testing
+batch_size = 50
+
+# Debug logging for Kona components
+log_level = "debug"
+
+# Standard timeout
+notification_timeout = 30
+
+[reth]
+# Fewer peers for testnet
+max_peers = 25
+max_outbound_peers = 15
+max_inbound_peers = 10
+
+# Different ports to avoid mainnet conflicts
+discovery_port = 30304
+listener_port = 30304
+
+# Different Engine API ports
+engine_http_port = 8553
+engine_ws_port = 8554
+
+# Debug logging for reth
+log_level = "debug"
+
+# Keep P2P enabled for testnet
+no_p2p = false

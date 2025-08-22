@@ -20,6 +20,7 @@ members = [
   "crates/batcher/*",
   "crates/providers/*",
   "crates/utilities/*",
+  "crates/rollup/*",
   "examples/*",
 ]
 default-members = [
@@ -106,6 +107,7 @@ kona-supervisor-metrics = { path = "crates/supervisor/metrics", version = "0.1.0
 
 # Providers
 kona-providers-alloy = { path = "crates/providers/providers-alloy", version = "0.3.3", default-features = false }
+kona-providers-local = { path = "crates/providers/local", version = "0.1.0", default-features = false }
 
 # Proof
 kona-driver = { path = "crates/proof/driver", version = "0.4.0", default-features = false }
@@ -179,6 +181,7 @@ tower = "0.5.2"
 bytes = "1.10.1"
 vergen = "9.0.6"
 tokio = "1.45.1"
+tokio-test = "0.4.4"
 rayon = "1.10.0"
 strum = "0.27"
 cfg-if = "1.0.0"

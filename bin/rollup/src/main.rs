@@ -1,4 +1,19 @@
-//! Unified rollup binary combining op-reth and kona-node into a single service.
+//! Unified rollup binary that integrates kona-node as an ExEx into op-reth.
+//!
+//! This binary follows the ExEx pattern to embed the Kona rollup node directly
+//! into the op-reth execution client, reducing operational complexity and latency.
+//!
+//! ## Architecture
+//!
+//! The rollup binary is designed to be extremely simple:
+//!
+//! 1. Parse op-reth CLI arguments using reth's native CLI parser
+//! 2. Build the op-reth node using the node builder
+//! 3. Install kona-node as an ExEx named "KonaNode"
+//! 4. Launch the combined system and wait for shutdown
+//!
+//! This approach eliminates the need for separate binaries and reduces the
+//! operational burden on rollup operators.
 
 #![doc(issue_tracker_base_url = "https://github.com/op-rs/kona/issues/")]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
@@ -6,136 +21,99 @@
 #![deny(unused_must_use)]
 #![deny(rust_2018_idioms)]
 
-use rollup::Cli;
-use std::process::ExitCode;
-use tokio::signal;
-use tracing::{error, info};
+use rollup::{ExExContext, KonaNodeExEx};
+use tokio::sync::mpsc;
+use tracing::info;
 
-// TODO: Import from rollup-service crate when available
-// use rollup_service::RollupService;
-
-/// Main entry point for the rollup binary.
+/// Main entry point for the unified rollup binary.
+///
+/// ## Usage Pattern
+///
+/// This implementation follows the ExEx pattern described in EXEX.md:
+///
+/// ```rust,ignore
+/// reth::cli::Cli::parse_args().run(|builder, _| async move {
+///     let handle = builder
+///         .node(OpNode::default())
+///         .install_exex("KonaNode", move |ctx| async {
+///             Ok(KonaNode::new(ctx)?.start())
+///         })
+///         .launch()
+///         .await?;
+///     handle.wait_for_node_exit().await
+/// })
+/// ```
+///
+/// ## Current Status
+///
+/// This is a placeholder implementation until proper reth and op-reth ExEx
+/// dependencies are available in the workspace. The structure demonstrates
+/// the intended pattern and can be easily updated once dependencies are resolved.
 #[tokio::main]
-async fn main() -> ExitCode {
-    // Install signal handlers for graceful shutdown
-    install_signal_handlers();
+async fn main() -> anyhow::Result<()> {
+    // Setup tracing and signal handlers
+    setup_tracing_and_signals();
 
-    // Parse CLI arguments
-    let cli = match Cli::parse_args() {
-        Ok(cli) => cli,
-        Err(e) => {
-            eprintln!("Failed to parse CLI arguments: {}", e);
-            return ExitCode::from(1);
-        }
-    };
+    info!("Starting Kona Rollup Binary");
+    info!("This binary integrates kona-node as an ExEx into op-reth");
 
-    // Initialize logging
-    if let Err(e) = cli.init_logging() {
-        eprintln!("Failed to initialize logging: {}", e);
-        return ExitCode::from(1);
-    }
+    // TODO: Replace with actual reth CLI parsing once dependencies are available
+    // reth::cli::Cli::parse_args().run(|builder, _| async move {
+    //     let handle = builder
+    //         .node(op_reth_node::OpNode::default())
+    //         .install_exex("KonaNode", move |ctx| async {
+    //             let kona_exex = KonaNodeExEx::new(ctx)?;
+    //             Ok(kona_exex.start())
+    //         })
+    //         .launch()
+    //         .await?;
+    //     handle.wait_for_node_exit().await
+    // }).await
 
-    // Convert CLI to configuration
-    let mut config = match cli.into_config() {
-        Ok(config) => config,
-        Err(e) => {
-            error!("Failed to create configuration: {}", e);
-            return ExitCode::from(1);
-        }
-    };
-
-    // Merge environment variables
-    if let Err(e) = config.merge_env_vars() {
-        error!("Failed to merge environment variables: {}", e);
-        return ExitCode::from(1);
-    }
-
-    info!("Starting kona rollup binary");
-
-    // TODO: Replace this placeholder with actual rollup-service usage when available
-    // let mut service = match RollupService::new(config).await {
-    //     Ok(service) => service,
-    //     Err(e) => {
-    //         error!("Failed to create rollup service: {}", e);
-    //         return ExitCode::from(1);
-    //     }
-    // };
-    // 
-    // if let Err(e) = service.start().await {
-    //     error!("Failed to start rollup service: {}", e);
-    //     return ExitCode::from(1);
-    // }
-    // 
-    // tokio::select! {
-    //     result = service.run() => {
-    //         match result {
-    //             Ok(()) => {
-    //                 info!("Rollup service completed successfully");
-    //                 ExitCode::from(0)
-    //             }
-    //             Err(e) => {
-    //                 error!("Rollup service failed: {}", e);
-    //                 ExitCode::from(1)
-    //             }
-    //         }
-    //     }
-    //     _ = wait_for_shutdown_signal() => {
-    //         info!("Shutdown signal received, initiating graceful shutdown");
-    //         if let Err(e) = service.shutdown().await {
-    //             error!("Error during shutdown: {}", e);
-    //             ExitCode::from(1)
-    //         } else {
-    //             info!("Graceful shutdown completed");
-    //             ExitCode::from(0)
-    //         }
-    //     }
-    // }
-
-    // Placeholder implementation until rollup-service crate is available
-    info!("Configuration loaded successfully: {:?}", config.global.chain);
-    info!("Waiting for shutdown signal (rollup-service integration pending)");
-    
-    wait_for_shutdown_signal().await;
-    info!("Shutdown signal received");
-    
-    info!("Kona rollup binary exiting");
-    ExitCode::from(0)
+    // Placeholder implementation showing the intended structure
+    demo_exex_integration().await
 }
 
-/// Install signal handlers for graceful shutdown.
-fn install_signal_handlers() {
-    // Install SIGSEGV handler from kona-cli if available
-    kona_cli::sigsegv_handler::install();
-    
-    // Enable backtrace for better error reporting
-    kona_cli::backtrace::enable();
-}
+/// Demonstrates the ExEx integration pattern until proper dependencies are available.
+async fn demo_exex_integration() -> anyhow::Result<()> {
+    info!("Running demo ExEx integration");
 
-/// Wait for shutdown signals (SIGINT, SIGTERM).
-async fn wait_for_shutdown_signal() {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("Failed to install Ctrl+C handler");
-    };
+    // Create mock ExEx context
+    let (events_tx, _events_rx) = mpsc::unbounded_channel();
+    let (_notifications_tx, notifications_rx) = mpsc::unbounded_channel();
 
-    #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("Failed to install signal handler")
-            .recv()
-            .await;
-    };
+    let ctx = ExExContext { notifications: notifications_rx, events: events_tx };
 
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
+    // Create and start the Kona Node ExEx
+    info!("Creating Kona Node ExEx");
+    let kona_exex = KonaNodeExEx::new(ctx)?;
 
+    info!("Starting Kona Node ExEx");
+    let exex_future = kona_exex.start();
+
+    // In the real implementation, this would be handled by the reth node
+    // For now, just demonstrate the structure
     tokio::select! {
-        _ = ctrl_c => {
-            info!("Received SIGINT (Ctrl+C)");
-        },
-        _ = terminate => {
-            info!("Received SIGTERM");
-        },
+        result = exex_future => {
+            info!("ExEx completed: {:?}", result);
+            result
+        }
+        _ = tokio::signal::ctrl_c() => {
+            info!("Received shutdown signal");
+            Ok(())
+        }
     }
+}
+
+/// Setup tracing and signal handlers for better error reporting.
+fn setup_tracing_and_signals() {
+    // Initialize tracing with default settings
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,kona=debug".into()),
+        )
+        .init();
+
+    info!("Tracing initialized");
 }

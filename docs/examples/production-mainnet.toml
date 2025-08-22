@@ -1,0 +1,92 @@
+# Kona Rollup Binary - Production Mainnet Configuration
+#
+# This configuration is optimized for production deployment on OP Mainnet.
+# Copy this file to your desired location and customize the values below.
+#
+# Usage: ./rollup --config production-mainnet.toml
+
+[general]
+# Chain ID for OP Mainnet
+chain_id = 10
+
+# Data directory - ensure this is on fast SSD storage with sufficient space
+# Recommended: NVMe SSD with at least 1TB free space
+data_dir = "/opt/rollup/mainnet/data"
+
+# Log level - 'info' provides good balance of information vs performance
+# Options: trace, debug, info, warn, error
+log_level = "info"
+
+# Prometheus metrics server port
+metrics_port = 9090
+
+# Health check endpoint port  
+health_port = 8080
+
+[l1]
+# REQUIRED: Ethereum mainnet RPC endpoint
+# Replace YOUR_API_KEY with your actual API key
+rpc_url = "https://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY"
+
+# WebSocket endpoint for real-time updates (recommended for production)
+ws_url = "wss://eth-mainnet.alchemyapi.io/v2/YOUR_API_KEY"
+
+# Beacon chain API endpoint (optional, improves sync performance)
+beacon_url = "https://ethereum-beacon-api.publicnode.com"
+
+[l2]
+# OP Mainnet RPC endpoint for validation (recommended)
+rpc_url = "https://mainnet.optimism.io"
+
+# OP Mainnet WebSocket endpoint
+ws_url = "wss://ws-mainnet.optimism.io"
+
+[kona]
+# L2 provider cache size - larger cache improves performance but uses more memory
+# 2000 blocks ≈ 100-200MB memory usage (depending on transaction density)
+buffer_size = 2000
+
+# Reorg depth tracking - keep at 64 for safety
+reorg_depth = 64
+
+# Maximum concurrent requests to L1/L2 endpoints
+# Adjust based on your endpoint rate limits
+max_concurrent_requests = 15
+
+# Batch size for block processing
+batch_size = 100
+
+# Kona component log level
+log_level = "info"
+
+# Notification processing timeout (seconds)
+# Increase for high-latency environments
+notification_timeout = 60
+
+[reth]
+# Maximum peer connections - higher provides better connectivity
+max_peers = 100
+
+# Maximum outbound peer connections
+max_outbound_peers = 50
+
+# Maximum inbound peer connections
+max_inbound_peers = 50
+
+# P2P discovery service port - ensure this is open in firewall
+discovery_port = 30303
+
+# P2P listener port
+listener_port = 30303
+
+# Engine API HTTP port (for consensus client communication)
+engine_http_port = 8551
+
+# Engine API WebSocket port
+engine_ws_port = 8552
+
+# Reth component log level
+log_level = "info"
+
+# Disable P2P networking (DO NOT enable for production)
+no_p2p = false

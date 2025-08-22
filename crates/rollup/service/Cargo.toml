@@ -1,0 +1,65 @@
+[package]
+name = "rollup-service"
+description = "Rollup service orchestration and ExEx integration for the unified rollup binary"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# workspace
+kona-node-service.workspace = true
+kona-providers-alloy.workspace = true
+kona-protocol.workspace = true
+kona-derive.workspace = true
+
+# alloy
+alloy-consensus.workspace = true
+alloy-primitives.workspace = true
+alloy-rpc-types.workspace = true
+alloy-provider.workspace = true
+
+# op-alloy
+op-alloy-network.workspace = true
+op-alloy-consensus.workspace = true
+
+# async
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
+futures.workspace = true
+async-trait.workspace = true
+
+# error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+# logging
+tracing.workspace = true
+
+# networking
+url = { workspace = true, features = ["serde"] }
+dirs.workspace = true
+
+# time
+# std types are available by default
+
+# ExEx integration (commented until reth dependency is available)
+# reth-exex = { version = "1.0", optional = true }
+
+[dev-dependencies]
+rstest.workspace = true
+arbitrary.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
+
+[features]
+default = []
+metrics = []
+# exex = ["dep:reth-exex"]
