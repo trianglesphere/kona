@@ -6,11 +6,15 @@
 #![deny(unused_must_use)]
 #![deny(rust_2018_idioms)]
 
-mod cli;
-mod exex;
+pub mod cli;
+pub mod exex;
+pub mod flags;
+pub mod node_builder;
 
-pub use cli::RollupCli;
+pub use cli::Cli;
 pub use exex::KonaNodeExEx;
+pub use flags::GlobalArgs;
+pub use node_builder::run_op_reth_with_kona_exex;
 
 /// Binary version.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

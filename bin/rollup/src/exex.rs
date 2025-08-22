@@ -15,13 +15,19 @@ use tracing::{error, info};
 /// Errors for Kona ExEx operations.
 #[derive(Debug, thiserror::Error)]
 pub enum KonaExExError {
+    /// Node service error.
     #[error("Node service error: {0}")]
     NodeService(String),
+    /// Provider error.
     #[error("Provider error: {0}")]
     Provider(#[from] BufferedProviderError),
+    /// ExEx error.
     #[error("ExEx error: {0}")]
     ExEx(String),
 }
+
+// Note: reth_exex error handling is done through Result<T, E> where E: std::error::Error
+// No need for explicit conversion as KonaExExError implements std::error::Error
 
 /// Kona Node ExEx that processes chain events.
 #[derive(Debug)]
@@ -83,17 +89,15 @@ where
 
             loop {
                 tokio::select! {
-                    notification = self.ctx.notifications.next() => {
-                        if let Some(notification_result) = notification {
-                            match notification_result {
-                                Ok(notification) => {
-                                    if let Err(e) = self.handle_notification(notification, &mut last_processed_height).await {
-                                        error!("Failed to process notification: {}", e);
-                                    }
+                    Some(notification) = self.ctx.notifications.next() => {
+                        match notification {
+                            Ok(notification) => {
+                                if let Err(e) = self.handle_notification(notification, &mut last_processed_height).await {
+                                    error!("Failed to process notification: {}", e);
                                 }
-                                Err(e) => {
-                                    error!("Error receiving notification: {}", e);
-                                }
+                            }
+                            Err(e) => {
+                                error!("Error receiving notification: {}", e);
                             }
                         }
                     }

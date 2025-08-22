@@ -27,13 +27,20 @@ libp2p-identity.workspace = true
 k256 = "0.13"
 rand = "0.8"
 
-# Reth core dependencies (minimal set to avoid CLI conflicts)
+# Reth core dependencies for NodeBuilder API integration
+reth = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-execution-types = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-node-api = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-node-types = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-node-builder = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-optimism-node = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-node-ethereum = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-cli-runner = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-db-api.workspace = true
 reth-db.workspace = true
 reth-codecs.workspace = true
@@ -54,6 +61,13 @@ tracing-subscriber.workspace = true
 # Error handling
 anyhow.workspace = true
 thiserror.workspace = true
+eyre.workspace = true
+
+# Testing
+tempfile = "3.8"
+
+# Serialization
+serde_json = "1.0"
 
 # Actor coordination
 tokio-util.workspace = true
