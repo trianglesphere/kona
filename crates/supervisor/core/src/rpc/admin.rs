@@ -7,8 +7,12 @@ use jsonrpsee::{
     types::{ErrorCode, ErrorObject, ErrorObjectOwned},
 };
 use kona_supervisor_rpc::SupervisorAdminApiServer;
+use std::time::Duration;
 use thiserror::Error;
-use tokio::sync::{mpsc::Sender, oneshot};
+use tokio::{
+    sync::{mpsc::Sender, oneshot},
+    time::timeout,
+};
 use tracing::warn;
 
 /// Error types for Supervisor Admin RPC operations.
@@ -21,6 +25,10 @@ pub enum AdminError {
     /// Indicates that the request to the admin channel failed to send.
     #[error("failed to send admin request")]
     SendFailed,
+
+    /// Indicates that the sender dropped before a response was received.
+    #[error("admin request sender dropped")]
+    SenderDropped,
 
     /// Indicates that the admin request timed out.
     #[error("admin request timed out")]
@@ -37,11 +45,15 @@ impl From<AdminError> for ErrorObjectOwned {
             // todo: handle these errors more gracefully
             AdminError::InvalidJwtSecret(_) |
             AdminError::SendFailed |
+            AdminError::SenderDropped |
             AdminError::Timeout |
             AdminError::ServiceError(_) => ErrorObjectOwned::from(ErrorCode::InternalError),
         }
     }
 }
+
+// timeout for admin requests (seconds)
+const ADMIN_REQUEST_TIMEOUT_SECS: u64 = 3;
 
 /// Represents Admin Request types
 #[derive(Debug)]
@@ -82,15 +94,21 @@ impl SupervisorAdminApiServer for AdminRpc {
             ErrorObject::from(AdminError::SendFailed)
         })?;
 
-        // todo: add a timeout for the response
-        let res = resp_rx.await.map_err(|err| {
-            warn!(target: "supervisor::admin_rpc", %url, %err, "Failed to process AdminRequest");
-            ErrorObject::from(AdminError::Timeout)
-        })?;
-
-        match res {
-            Ok(()) => Ok(()),
-            Err(err) => Err(ErrorObject::from(err)),
+        // wait for response with a timeout
+        match timeout(Duration::from_secs(ADMIN_REQUEST_TIMEOUT_SECS), resp_rx).await {
+            Ok(Ok(Ok(()))) => Ok(()),
+            Ok(Ok(Err(err))) => {
+                warn!(target: "supervisor::admin_rpc", %url, %err, "Failed to process AdminRequest");
+                Err(ErrorObject::from(err))
+            }
+            Ok(Err(err)) => {
+                warn!(target: "supervisor::admin_rpc", %url, %err, "AdminRequest sender dropped");
+                Err(ErrorObject::from(AdminError::SenderDropped))
+            }
+            Err(_) => {
+                warn!(target: "supervisor::admin_rpc", %url, "AdminRequest timed out");
+                Err(ErrorObject::from(AdminError::Timeout))
+            }
         }
     }
 }
@@ -98,7 +116,10 @@ impl SupervisorAdminApiServer for AdminRpc {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::mpsc;
+    use tokio::{
+        sync::mpsc,
+        time::{self, Duration},
+    };
 
     // valid 32-byte hex (64 hex chars)
     const VALID_SECRET: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -133,5 +154,64 @@ mod tests {
 
         let res = admin.add_l2_rpc("http://node:8545".to_string(), "zzzz".to_string()).await;
         assert!(res.is_err(), "expected error for invalid jwt secret");
+    }
+
+    #[tokio::test]
+    async fn test_add_l2_rpc_send_failed() {
+        // create channel and drop the receiver to force send() -> Err
+        let (tx, rx) = mpsc::channel::<AdminRequest>(1);
+        drop(rx);
+        let admin = AdminRpc::new(tx);
+
+        let res = admin.add_l2_rpc("http://node:8545".to_string(), VALID_SECRET.to_string()).await;
+        assert!(res.is_err(), "expected error when admin channel receiver is closed");
+    }
+
+    #[tokio::test]
+    async fn test_add_l2_rpc_service_response_dropped() {
+        let (tx, mut rx) = mpsc::channel::<AdminRequest>(1);
+        let admin = AdminRpc::new(tx.clone());
+
+        // handler drops the response sender to simulate service failure before replying
+        let handler = tokio::spawn(async move {
+            if let Some(AdminRequest::AddL2Rpc { cfg: _, resp }) = rx.recv().await {
+                // drop the sender without sending -> receiver side will get Err
+                drop(resp);
+            } else {
+                panic!("expected AddL2Rpc request");
+            }
+        });
+
+        let res = admin.add_l2_rpc("http://node:8545".to_string(), VALID_SECRET.to_string()).await;
+        assert!(res.is_err(), "expected error when service drops response channel");
+        handler.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_add_l2_rpc_timeout() {
+        // use a handler that receives the request but does not reply (keeps sender alive)
+        let (tx, mut rx) = mpsc::channel::<AdminRequest>(1);
+        let admin = AdminRpc::new(tx.clone());
+
+        let handler = tokio::spawn(async move {
+            if let Some(AdminRequest::AddL2Rpc { cfg: _, resp: _ }) = rx.recv().await {
+                // hold the sender (do nothing) so the rpc call times out
+                // keep the future alive long enough (we use tokio::time::advance in the test)
+                time::sleep(Duration::from_secs(ADMIN_REQUEST_TIMEOUT_SECS + 5)).await;
+            } else {
+                panic!("expected AddL2Rpc request");
+            }
+        });
+
+        // call the rpc concurrently
+        let call = tokio::spawn(async move {
+            admin.add_l2_rpc("http://node:8545".to_string(), VALID_SECRET.to_string()).await
+        });
+
+        let res = call.await.unwrap();
+        assert!(res.is_err(), "expected timeout error for long-running admin handler");
+
+        // let handler finish cleanly
+        handler.await.unwrap();
     }
 }
