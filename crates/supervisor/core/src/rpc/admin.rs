@@ -120,7 +120,7 @@ mod tests {
         });
 
         let res = admin.add_l2_rpc("http://node:8545".to_string(), VALID_SECRET.to_string()).await;
-        assert!(res.is_ok(), "expected Ok(()), got {:?}", res);
+        assert!(res.is_ok(), "expected successful response");
 
         handler.await.unwrap();
     }
