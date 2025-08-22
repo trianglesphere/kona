@@ -43,7 +43,7 @@ impl From<AdminError> for ErrorObjectOwned {
     fn from(err: AdminError) -> Self {
         match err {
             // todo: handle these errors more gracefully
-            AdminError::InvalidJwtSecret(_) |
+            AdminError::InvalidJwtSecret(_) => ErrorObjectOwned::from(ErrorCode::InvalidParams),
             AdminError::SendFailed |
             AdminError::SenderDropped |
             AdminError::Timeout |
