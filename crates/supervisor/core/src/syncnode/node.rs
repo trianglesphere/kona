@@ -1,5 +1,10 @@
 //! [`ManagedNode`] implementation for subscribing to the events from managed node.
 
+use super::{
+    BlockProvider, ManagedNodeClient, ManagedNodeController, ManagedNodeDataProvider,
+    ManagedNodeError, SubscriptionHandler, resetter::Resetter,
+};
+use crate::event::ChainEvent;
 use alloy_eips::BlockNumberOrTag;
 use alloy_network::Ethereum;
 use alloy_primitives::{B256, ChainId};
@@ -12,12 +17,6 @@ use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, Log
 use kona_supervisor_types::{BlockSeal, OutputV0, Receipts};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-
-use super::{
-    BlockProvider, ManagedNodeClient, ManagedNodeController, ManagedNodeDataProvider,
-    ManagedNodeError, SubscriptionHandler, resetter::Resetter,
-};
-use crate::event::ChainEvent;
 use tracing::{error, trace, warn};
 
 /// [`ManagedNode`] handles the subscription to managed node events.
@@ -127,7 +126,6 @@ where
                 current_source = %derived_ref_pair.source,
                 "Parent hash mismatch. Possible reorg detected"
             );
-            return Ok(());
         }
 
         self.client.provide_l1(new_source).await.inspect_err(|err| {

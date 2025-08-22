@@ -10,7 +10,7 @@ use kona_supervisor_types::{ExecutingMessage, Log};
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 /// The [`LogIndexer`] is responsible for processing L2 receipts, extracting [`ExecutingMessage`]s,
 /// and persisting them to the state manager.
@@ -101,6 +101,7 @@ where
     /// # Arguments
     /// - `block`: Metadata about the block being processed.
     pub async fn process_and_store_logs(&self, block: &BlockInfo) -> Result<(), LogIndexerError> {
+        info!(target: "log_indexer", chain_id = %self.chain_id, block_number = block.number, block_hash = %block.hash, "process unsafe block");
         let receipts = self.block_provider.fetch_receipts(block.hash).await?;
         let mut log_entries = Vec::with_capacity(receipts.len());
         let mut log_index: u32 = 0;

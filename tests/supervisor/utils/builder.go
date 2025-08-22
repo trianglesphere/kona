@@ -219,7 +219,7 @@ func (s *TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.Ha
 		FinalizedBlockHash: finalizedBlock.Hash(),
 	}
 
-	newBlockTimestamp := head.Time() + 12
+	newBlockTimestamp := head.Time() + 6
 	nonce := time.Now().UnixNano()
 	var nonceBytes [8]byte
 	binary.LittleEndian.PutUint64(nonceBytes[:], uint64(nonce))

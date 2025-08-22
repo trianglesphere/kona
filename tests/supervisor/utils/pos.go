@@ -35,6 +35,7 @@ func NewTestPOS(t devtest.CommonT, rpcURL string, blockBuilder *TestBlockBuilder
 
 // Starts a background process to build blocks
 func (p *TestPOS) Start() error {
+	p.t.Log("Starting sequential block builder")
 	// already started
 	if p.ctx != nil {
 		return nil
@@ -45,7 +46,7 @@ func (p *TestPOS) Start() error {
 
 	go func() {
 		defer p.wg.Done()
-		ticker := time.NewTicker(time.Second / 2)
+		ticker := time.NewTicker(time.Second * 5)
 		defer ticker.Stop()
 
 		for {
@@ -53,13 +54,9 @@ func (p *TestPOS) Start() error {
 			case <-p.ctx.Done():
 				return
 			case <-ticker.C:
-				head, err := p.ethClient.BlockByNumber(p.ctx, big.NewInt(rpc.LatestBlockNumber.Int64()))
+				_, err := p.ethClient.BlockByNumber(p.ctx, big.NewInt(rpc.LatestBlockNumber.Int64()))
 				if err != nil {
 					p.t.Errorf("failed to fetch latest block: %v", err)
-				}
-
-				if head.Time() >= uint64(time.Now().Unix()) {
-					continue
 				}
 
 				// Build a new block

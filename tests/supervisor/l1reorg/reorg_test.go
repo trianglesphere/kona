@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
 	"github.com/op-rs/kona/supervisor/utils"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,24 +17,30 @@ type checksFunc func(t devtest.T, sys *presets.SimpleInterop)
 
 func TestL1Reorg(gt *testing.T) {
 	gt.Run("unsafe reorg", func(gt *testing.T) {
-		var crossSafeRef, localSafeRef, unsafeRef eth.BlockID
+		var crossSafeRef, localSafeRef, unsafeRef, reorgAfter eth.BlockID
 		pre := func(t devtest.T, sys *presets.SimpleInterop) {
 			ss := sys.Supervisor.FetchSyncStatus()
+
 			crossSafeRef = ss.Chains[sys.L2ChainA.ChainID()].CrossSafe
 			localSafeRef = ss.Chains[sys.L2ChainA.ChainID()].LocalSafe
 			unsafeRef = ss.Chains[sys.L2ChainA.ChainID()].LocalUnsafe.ID()
 			gt.Logf("Pre:: CrossSafe: %s, LocalSafe: %s, Unsafe: %s", crossSafeRef, localSafeRef, unsafeRef)
+
+			// Calculate the divergent block
+			blockRef, err := sys.Supervisor.Escape().QueryAPI().CrossDerivedToSource(gt.Context(), sys.L2ChainA.ChainID(), localSafeRef)
+			assert.Nil(gt, err, "Failed to query cross derived to source")
+			reorgAfter = blockRef.ID()
 		}
 		post := func(t devtest.T, sys *presets.SimpleInterop) {
 			require.True(t, sys.L2ELA.IsCanonical(crossSafeRef), "Previous cross-safe block should still be canonical")
 			require.True(t, sys.L2ELA.IsCanonical(localSafeRef), "Previous local-safe block should still be canonical")
 			require.False(t, sys.L2ELA.IsCanonical(unsafeRef), "Previous unsafe block should have been reorged")
 		}
-		testL2ReorgAfterL1Reorg(gt, 3, pre, post)
+		testL2ReorgAfterL1Reorg(gt, &reorgAfter, pre, post)
 	})
 }
 
-func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksFunc) {
+func testL2ReorgAfterL1Reorg(gt *testing.T, reorgAfter *eth.BlockID, preChecks, postChecks checksFunc) {
 	t := devtest.SerialT(gt)
 	ctx := t.Ctx()
 
@@ -44,36 +51,51 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksF
 
 	trm.StopL1CL()
 
-	// sequence a few L1 and L2 blocks
-	for range n + 1 {
+	// sequence some l1 blocks initially
+	for range 10 {
 		trm.GetBlockBuilder().BuildBlock(ctx, nil)
-
-		sys.L2ChainA.WaitForBlock()
-		sys.L2ChainB.WaitForBlock()
+		time.Sleep(5 * time.Second)
 	}
-
-	// select a divergence block to reorg from
-	var divergence eth.L1BlockRef
-	{
-		tip := sys.L1EL.BlockRefByLabel(eth.Unsafe)
-		require.Greater(t, tip.Number, uint64(n), "n is larger than L1 tip, cannot reorg out block number `tip-n`")
-
-		divergence = sys.L1EL.BlockRefByNumber(tip.Number - uint64(n))
-	}
-
-	// print the chains before sequencing an alternative L1 block
-	sys.L2ChainA.PrintChain()
-	sys.L1Network.PrintChain()
 
 	// pre reorg trigger validations and checks
 	preChecks(t, sys)
 
+	tip := sys.L1EL.BlockRefByLabel(eth.Unsafe).Number
+
+	// create at least 5 blocks after the divergence point
+	for tip-reorgAfter.Number < 5 {
+		trm.GetBlockBuilder().BuildBlock(ctx, nil)
+		time.Sleep(5 * time.Second)
+		tip++
+	}
+
+	// Give some time so that those block are derived
+	time.Sleep(time.Second * 10)
+
+	divergence := sys.L1EL.BlockRefByNumber(reorgAfter.Number + 1)
+
 	tipL2_preReorg := sys.L2ELA.BlockRefByLabel(eth.Unsafe)
 
 	// reorg the L1 chain -- sequence an alternative L1 block from divergence block parent
+	t.Log("Building Divergence Chain from:", divergence)
 	trm.GetBlockBuilder().BuildBlock(ctx, &divergence.ParentHash)
 
+	t.Log("Stopping the batchers")
+	sys.L2BatcherA.Stop()
+	sys.L2BatcherB.Stop()
+
+	t.Log("Starting the batchers again")
+	sys.L2BatcherA.Start()
+	sys.L2BatcherB.Start()
+
+	// Give some time to batcher catch up
+	time.Sleep(5 * time.Second)
+
+	// Start sequencial block building
 	trm.GetPOS().Start()
+
+	// Wait sometime(5*5 = 25 at least) so that pos can create required
+	time.Sleep(30 * time.Second)
 
 	// confirm L1 reorged
 	sys.L1EL.ReorgTriggered(divergence, 5)
@@ -92,10 +114,6 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, n int, preChecks, postChecks checksF
 		}
 
 		sys.Log.Info("current unsafe ref", "tip", unsafe, "tip_origin", unsafe.L1Origin, "l1blk", eth.InfoToL1BlockRef(block))
-
-		// print the chains so we have information to debug if the test fails
-		sys.L2ChainA.PrintChain()
-		sys.L1Network.PrintChain()
 
 		return block.Hash() == unsafe.L1Origin.Hash
 	}, 120*time.Second, 7*time.Second, "L1 block origin hash should match hash of block on L1 at that number. If not, it means there was a reorg, and L2 blocks L1Origin field is referencing a reorged block.")
