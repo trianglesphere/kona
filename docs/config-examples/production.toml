@@ -1,0 +1,28 @@
+# Production Configuration for Kona Rollup
+
+[general]
+chain_id = 10
+data_dir = "/var/lib/kona"
+log_level = "info"
+
+[l1]
+rpc_url = "${ROLLUP_L1_RPC_URL}"  # Set via environment
+beacon_url = "${ROLLUP_L1_BEACON_URL}"
+
+[l2]
+rpc_url = "https://mainnet.optimism.io"
+
+[kona]
+buffer_size = 1000
+reorg_depth = 64
+max_concurrent_requests = 10
+
+[reth]
+max_peers = 50
+discovery_port = 30303
+engine_http_port = 8551
+
+[metrics]
+enabled = true
+addr = "127.0.0.1"
+port = 9090
