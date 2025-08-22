@@ -134,8 +134,6 @@ impl Service {
             anyhow::anyhow!("failed to get chain ID from client: {err}")
         })?;
 
-        // todo: check if the chain ID is supported by the supervisor
-
         let db = self.database_factory.get_db(chain_id)?;
 
         let chain_event_sender = self
@@ -153,13 +151,11 @@ impl Service {
         }
 
         let managed_node = Arc::new(managed_node);
-        self.managed_nodes.insert(chain_id, managed_node.clone());
-        info!(target: "supervisor::service",
-             chain_id,
-            "Managed node for chain initialized successfully",
-        );
+        // add the managed node to the supervisor service
+        // also checks if the chain ID is supported
+        self.supervisor.add_managed_node(chain_id, managed_node.clone()).await?;
 
-        // set the managed node in log indexer
+        // set the managed node in the log indexer
         let log_indexer = self
             .log_indexers
             .get(&chain_id)
@@ -167,8 +163,11 @@ impl Service {
             .clone();
         log_indexer.set_block_provider(managed_node.clone()).await;
 
-        // add the managed node to the supervisor service
-        self.supervisor.add_managed_node(chain_id, managed_node.clone()).await;
+        self.managed_nodes.insert(chain_id, managed_node.clone());
+        info!(target: "supervisor::service",
+             chain_id,
+            "Managed node for chain initialized successfully",
+        );
 
         // start managed node actor
         let managed_node_receiver = self

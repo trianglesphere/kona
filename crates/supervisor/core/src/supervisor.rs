@@ -112,16 +112,25 @@ where
     }
 
     /// Adds a new managed node to the [`Supervisor`].
-    pub async fn add_managed_node(&self, chain_id: ChainId, managed_node: Arc<M>) {
+    pub async fn add_managed_node(
+        &self,
+        chain_id: ChainId,
+        managed_node: Arc<M>,
+    ) -> Result<(), SupervisorError> {
         // todo: instead of passing the chain ID, we should get it from the managed node
-        // todo: check if the chain ID is supported by the supervisor
+        if !self.config.dependency_set.dependencies.contains_key(&chain_id) {
+            warn!(target: "supervisor::service", %chain_id, "Unsupported chain ID");
+            return Err(SupervisorError::UnsupportedChainId);
+        }
+
         let mut managed_nodes = self.managed_nodes.lock().await;
         if managed_nodes.contains_key(&chain_id) {
             warn!(target: "supervisor::service", %chain_id, "Managed node already exists for chain");
-            return;
+            return Ok(());
         }
 
         managed_nodes.insert(chain_id, managed_node.clone());
+        Ok(())
     }
 
     fn verify_safety_level(
