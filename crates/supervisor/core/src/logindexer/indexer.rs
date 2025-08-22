@@ -46,7 +46,7 @@ where
         }
     }
 
-    /// Replace the block provider
+    /// Sets the block provider
     pub async fn set_block_provider(&self, block_provider: Arc<P>) {
         let mut guard = self.block_provider.lock().await;
         *guard = Some(block_provider);
