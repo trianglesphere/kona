@@ -10,7 +10,7 @@
 #![deny(rust_2018_idioms)]
 
 mod exex;
-pub use exex::{ExExContext, KonaNodeExEx};
+pub use exex::KonaNodeExEx;
 
 /// Version information for the rollup binary.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -20,13 +20,16 @@ kona-node-service.workspace = true
 kona-providers-local.workspace = true
 kona-providers-alloy.workspace = true
 
-# Reth dependencies (using workspace versions)
+# Reth core dependencies (minimal set to avoid CLI conflicts)
+reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-primitives-traits = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-node-api = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
+reth-node-types = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
 reth-db-api.workspace = true
 reth-db.workspace = true
 reth-codecs.workspace = true
-
-# For now, we'll use placeholder types until proper reth ExEx dependencies are available
-# TODO: Add proper reth and op-reth ExEx dependencies when available
 
 # Alloy
 alloy-primitives.workspace = true
@@ -34,6 +37,7 @@ alloy-provider.workspace = true
 
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+futures = { workspace = true }
 
 # Logging
 tracing.workspace = true
