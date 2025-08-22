@@ -207,13 +207,6 @@ where
             return Some(latest_block.id());
         }
 
-        info!(
-            target: "supervisor::l1_watcher",
-            incoming_block_number = latest_block.number,
-            previous_block_number = prev.number,
-            "reorg detected",
-        );
-
         match self.reorg_handler.handle_l1_reorg(latest_block).await {
             Ok(()) => {
                 info!(
