@@ -1,12 +1,13 @@
 use super::RollupConfigSet;
 use crate::syncnode::ClientConfig;
 use alloy_primitives::ChainId;
+use derive_more::Constructor;
 use kona_interop::{DependencySet, InteropValidationError, InteropValidator};
 use kona_protocol::BlockInfo;
 use std::{net::SocketAddr, path::PathBuf};
 
 /// Configuration for the Supervisor service.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Constructor)]
 pub struct Config {
     /// The URL of the L1 RPC endpoint.
     pub l1_rpc: String,

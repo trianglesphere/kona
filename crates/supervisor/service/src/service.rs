@@ -4,6 +4,7 @@ use alloy_primitives::ChainId;
 use alloy_provider::{RootProvider, network::Ethereum};
 use alloy_rpc_client::RpcClient;
 use anyhow::Result;
+use futures::future;
 use jsonrpsee::client_transport::ws::Url;
 use kona_supervisor_core::{
     ChainProcessor, CrossSafetyCheckerJob, LogIndexer, ReorgHandler, Supervisor,
@@ -399,11 +400,29 @@ impl Service {
         Ok(())
     }
 
+    async fn handle_admin_request(&mut self, req: AdminRequest) {
+        match req {
+            AdminRequest::AddL2Rpc { cfg, resp } => {
+                let result = match self.init_managed_node(&cfg).await {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        tracing::error!(target: "supervisor::service", %e, "admin add_l2_rpc failed");
+                        Err(AdminError::ServiceError(e.to_string()))
+                    }
+                };
+
+                let _ = resp.send(result);
+            }
+        }
+    }
+
     /// Runs the Supervisor service.
     /// This function will typically run indefinitely until interrupted.
     pub async fn run(&mut self) -> Result<()> {
         self.initialise().await?;
 
+        // todo: refactor this to only run the tasks completion loop
+        // and handle admin requests elewhere
         loop {
             tokio::select! {
                 // Admin requests (if admin_receiver was initialized)
@@ -412,23 +431,11 @@ impl Service {
                         rx.recv().await
                     } else {
                         // if no receiver present, never produce a value
-                        futures::future::pending::<Option<AdminRequest>>().await
+                        future::pending::<Option<AdminRequest>>().await
                     }
                 } => {
                     if let Some(req) = maybe_req {
-                        match req {
-                            AdminRequest::AddL2Rpc { cfg, resp } => {
-                                // attempt to add the managed node using existing init path
-                                let res = match self.init_managed_node(&cfg).await {
-                                    Ok(()) => Ok(()),
-                                    Err(err) => {
-                                        Err(AdminError::ServiceError(err.to_string()))
-                                    }
-                                };
-
-                                let _ = resp.send(res);
-                            }
-                        }
+                        self.handle_admin_request(req).await;
                     }
                 }
 
@@ -474,5 +481,42 @@ impl Service {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{net::SocketAddr, path::PathBuf};
+
+    use kona_interop::DependencySet;
+    use kona_supervisor_core::config::RollupConfigSet;
+
+    use super::*;
+
+    fn make_test_config(enable_admin: bool) -> Config {
+        let mut cfg = Config::new(
+            "http://localhost:8545".to_string(),
+            vec![],
+            PathBuf::from("/tmp/kona-supervisor"),
+            SocketAddr::from(([127, 0, 0, 1], 8545)),
+            false,
+            DependencySet {
+                dependencies: Default::default(),
+                override_message_expiry_window: None,
+            },
+            RollupConfigSet { rollups: HashMap::new() },
+        );
+        cfg.enable_admin_api = enable_admin;
+        cfg
+    }
+
+    #[tokio::test]
+    async fn test_init_rpc_server_enables_admin_receiver_when_flag_set() {
+        let cfg = Arc::new(make_test_config(true));
+        let mut svc = Service::new((*cfg).clone());
+
+        svc.config = cfg.clone();
+        svc.init_rpc_server().await.expect("init_rpc_server failed");
+        assert!(svc.admin_receiver.is_some(), "admin_receiver must be set when admin enabled");
     }
 }

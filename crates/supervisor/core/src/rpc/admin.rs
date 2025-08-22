@@ -94,3 +94,44 @@ impl SupervisorAdminApiServer for AdminRpc {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::mpsc;
+
+    // valid 32-byte hex (64 hex chars)
+    const VALID_SECRET: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+    #[tokio::test]
+    async fn test_add_l2_rpc_success() {
+        let (tx, mut rx) = mpsc::channel::<AdminRequest>(1);
+        let admin = AdminRpc::new(tx.clone());
+
+        // spawn a task that simulates the service handling the admin request
+        let handler = tokio::spawn(async move {
+            if let Some(AdminRequest::AddL2Rpc { cfg, resp }) = rx.recv().await {
+                assert_eq!(cfg.url, "http://node:8545");
+                // reply success
+                let _ = resp.send(Ok(()));
+            } else {
+                panic!("expected AddL2Rpc request");
+            }
+        });
+
+        let res = admin.add_l2_rpc("http://node:8545".to_string(), VALID_SECRET.to_string()).await;
+        assert!(res.is_ok(), "expected Ok(()), got {:?}", res);
+
+        handler.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_add_l2_rpc_invalid_jwt() {
+        // admin with working channel (not used because parsing fails early)
+        let (tx, _rx) = mpsc::channel::<AdminRequest>(1);
+        let admin = AdminRpc::new(tx);
+
+        let res = admin.add_l2_rpc("http://node:8545".to_string(), "zzzz".to_string()).await;
+        assert!(res.is_err(), "expected error for invalid jwt secret");
+    }
+}

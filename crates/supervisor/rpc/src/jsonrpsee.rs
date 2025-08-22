@@ -120,7 +120,7 @@ pub trait SupervisorApi {
 #[cfg_attr(feature = "client", rpc(server, client, namespace = "admin"))]
 pub trait SupervisorAdminApi {
     /// Adds L2RPC to the supervisor.
-    #[method(name = "addL2Rpc")]
+    #[method(name = "addL2RPC")]
     async fn add_l2_rpc(&self, url: String, jwt_secret: String) -> RpcResult<()>;
 }
 

@@ -157,12 +157,23 @@ impl SupervisorArgs {
 
     /// initialise and return the managed nodes configuration.
     pub fn init_managed_nodes_config(&self) -> Result<Vec<ClientConfig>> {
-        let mut managed_nodes = Vec::new();
+        let nodes: Vec<String> = self
+            .l2_consensus_nodes
+            .iter()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        if nodes.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut managed_nodes = Vec::with_capacity(nodes.len());
         let default_secret_path = self
             .l2_consensus_jwt_secret
             .first()
             .ok_or_else(|| anyhow::anyhow!("No JWT secrets provided"))?;
-        for (i, rpc_url) in self.l2_consensus_nodes.iter().enumerate() {
+        for (i, rpc_url) in nodes.iter().enumerate() {
             let secret_path = self.l2_consensus_jwt_secret.get(i).unwrap_or(default_secret_path);
 
             let secret = std::fs::read_to_string(secret_path).map_err(|err| {
@@ -644,6 +655,27 @@ mod tests {
 
         let err = args.init_managed_nodes_config().unwrap_err();
         assert!(err.to_string().contains("Failed to parse JWT secret"));
+    }
+
+    #[test]
+    fn test_init_managed_nodes_config_empty_nodes_returns_empty() {
+        let args = SupervisorArgs {
+            l1_rpc: "dummy".to_string(),
+            // clap/env may produce [""] — ensure it's filtered to empty
+            l2_consensus_nodes: vec!["".to_string()],
+            l2_consensus_jwt_secret: vec![],
+            datadir: PathBuf::from("dummy"),
+            datadir_sync_endpoint: None,
+            dependency_set: PathBuf::from("dummy.json"),
+            rollup_config_paths: PathBuf::from(""),
+            rpc_address: "127.0.0.1".parse().unwrap(),
+            rpc_port: 8545,
+            enable_admin_api: false,
+        };
+
+        let res = args.init_managed_nodes_config();
+        assert!(res.is_ok());
+        assert!(res.unwrap().is_empty());
     }
 
     #[tokio::test]
