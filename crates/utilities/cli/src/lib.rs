@@ -27,3 +27,10 @@ pub use prometheus::init_prometheus_server;
 pub mod sigsegv_handler;
 
 pub mod metrics_args;
+
+#[cfg(feature = "node-config")]
+pub mod node_config;
+#[cfg(feature = "node-config")]
+pub use node_config::{
+    ForkOverrides, GlobalConfig, NodeCliConfig, NodeMode, P2PConfig, RpcConfig, SequencerConfig,
+};

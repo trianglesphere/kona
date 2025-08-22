@@ -24,7 +24,14 @@ anyhow = { workspace = true, default-features = false }
 # `secrets` feature
 libp2p = { workspace = true, features = ["secp256k1"], optional = true }
 thiserror = { workspace = true, optional = true }
-alloy-primitives = { workspace = true, optional = true }
+alloy-primitives = { workspace = true, optional = true, features = ["serde"] }
+
+# `node-config` feature
+url = { workspace = true, optional = true, features = ["serde"] }
+alloy-chains = { workspace = true, optional = true, features = ["serde"] }
+
+[dev-dependencies]
+serde_json = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -32,3 +39,4 @@ libc = "0.2"
 [features]
 default = []
 secrets = [ "dep:alloy-primitives", "dep:libp2p", "dep:thiserror" ]
+node-config = [ "dep:url", "dep:alloy-primitives", "dep:alloy-chains" ]

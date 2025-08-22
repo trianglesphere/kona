@@ -4450,6 +4450,7 @@ dependencies = [
 name = "kona-cli"
 version = "0.3.2"
 dependencies = [
+ "alloy-chains",
  "alloy-primitives",
  "anyhow",
  "clap",
@@ -4458,10 +4459,12 @@ dependencies = [
  "metrics-exporter-prometheus",
  "metrics-process",
  "serde",
+ "serde_json",
  "thiserror 2.0.16",
  "tracing",
  "tracing-appender",
  "tracing-subscriber 0.3.19",
+ "url",
 ]
 
 [[package]]
@@ -9990,13 +9993,24 @@ dependencies = [
 name = "rollup"
 version = "0.0.0"
 dependencies = [
+ "alloy-chains",
  "alloy-primitives",
  "alloy-provider",
+ "alloy-rpc-types-engine",
  "anyhow",
+ "clap",
  "futures",
+ "k256",
+ "kona-cli",
+ "kona-disc",
+ "kona-genesis",
  "kona-node-service",
+ "kona-peers",
  "kona-providers-alloy",
  "kona-providers-local",
+ "kona-rpc",
+ "libp2p-identity",
+ "rand 0.8.5",
  "reth-codecs 1.6.0 (git+https://github.com/paradigmxyz/reth?tag=v1.6.0)",
  "reth-db 1.6.0 (git+https://github.com/paradigmxyz/reth?tag=v1.6.0)",
  "reth-db-api 1.6.0 (git+https://github.com/paradigmxyz/reth?tag=v1.6.0)",
@@ -10006,9 +10020,12 @@ dependencies = [
  "reth-node-types",
  "reth-primitives",
  "reth-primitives-traits 1.6.0 (git+https://github.com/paradigmxyz/reth?branch=main)",
+ "thiserror 2.0.16",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber 0.3.19",
+ "url",
 ]
 
 [[package]]

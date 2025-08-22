@@ -19,6 +19,13 @@ workspace = true
 kona-node-service.workspace = true
 kona-providers-local.workspace = true
 kona-providers-alloy.workspace = true
+kona-genesis.workspace = true
+kona-rpc.workspace = true
+kona-disc.workspace = true
+kona-peers.workspace = true
+libp2p-identity.workspace = true
+k256 = "0.13"
+rand = "0.8"
 
 # Reth core dependencies (minimal set to avoid CLI conflicts)
 reth-exex = { git = "https://github.com/paradigmxyz/reth", branch = "main" }
@@ -34,6 +41,7 @@ reth-codecs.workspace = true
 # Alloy
 alloy-primitives.workspace = true
 alloy-provider.workspace = true
+alloy-rpc-types-engine.workspace = true
 
 # Async runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
@@ -45,3 +53,15 @@ tracing-subscriber.workspace = true
 
 # Error handling
 anyhow.workspace = true
+thiserror.workspace = true
+
+# Actor coordination
+tokio-util.workspace = true
+
+# CLI configuration
+kona-cli = { path = "../../crates/utilities/cli", features = ["node-config"] }
+clap = { workspace = true, features = ["derive"] }
+url = { workspace = true }
+
+# Chain support
+alloy-chains = { workspace = true }

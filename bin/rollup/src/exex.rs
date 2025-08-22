@@ -1,36 +1,42 @@
-//! Kona Node Execution Extension for Reth integration.
-//!
-//! This module provides the ExEx implementation that wraps kona-node-service
-//! and integrates it with the Reth node through the ExEx interface.
+//! Kona Node Execution Extension for reth integration.
 
-use alloy_primitives::{BlockNumber, B256};
+use alloy_primitives::{B256, BlockNumber};
 use futures::StreamExt;
-use kona_node_service::RollupNode;
-use kona_providers_local::{BufferedL2Provider, ChainStateEvent};
+use kona_cli::NodeCliConfig;
+use kona_providers_local::{BufferedL2Provider, BufferedProviderError, ChainStateEvent};
 use reth_exex::{ExExContext, ExExEvent, ExExNotification};
 use reth_node_api::FullNodeComponents;
 use reth_node_types::NodeTypes;
-use reth_primitives::{NodePrimitives, SealedBlock};
-use reth_primitives_traits::AlloyBlockHeader;
+use reth_primitives::NodePrimitives;
 use std::future::Future;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-/// Kona Node Execution Extension that wraps the RollupNode.
-/// 
-/// Node must implement FullNodeComponents and have Types that implement NodeTypes
-/// with primitives that are NodePrimitives.
+/// Errors for Kona ExEx operations.
+#[derive(Debug, thiserror::Error)]
+pub enum KonaExExError {
+    #[error("Node service error: {0}")]
+    NodeService(String),
+    #[error("Provider error: {0}")]
+    Provider(#[from] BufferedProviderError),
+    #[error("ExEx error: {0}")]
+    ExEx(String),
+}
+
+/// Kona Node ExEx that processes chain events.
+#[derive(Debug)]
 pub struct KonaNodeExEx<Node>
 where
     Node: FullNodeComponents,
     Node::Types: NodeTypes,
     <Node::Types as NodeTypes>::Primitives: NodePrimitives,
 {
-    /// The underlying Kona rollup node.
-    node: Option<RollupNode>,
-    /// ExEx context for communication with Reth.
+    /// ExEx context for communication with reth.
     ctx: ExExContext<Node>,
-    /// Buffered provider for caching L2 chain state.
+    /// Buffered provider for L2 chain state caching.
     provider: BufferedL2Provider,
+    /// Cancellation token for shutdown coordination.
+    shutdown: CancellationToken,
 }
 
 impl<Node> KonaNodeExEx<Node>
@@ -39,59 +45,64 @@ where
     Node::Types: NodeTypes,
     <Node::Types as NodeTypes>::Primitives: NodePrimitives,
 {
-    /// Creates a new Kona Node ExEx from the given context.
-    pub fn new(ctx: ExExContext<Node>) -> anyhow::Result<Self> {
-        info!("Initializing Kona Node ExEx");
+    /// Creates a new Kona Node ExEx.
+    pub fn new(ctx: ExExContext<Node>) -> Result<Self, KonaExExError> {
+        Self::new_with_config(ctx, NodeCliConfig::default())
+    }
 
-        // Create buffered provider for L2 chain state caching
-        let url = "http://localhost:8545".parse()?;
-        let alloy_provider = alloy_provider::RootProvider::new_http(url);
+    /// Creates a new Kona Node ExEx with configuration.
+    pub fn new_with_config(
+        ctx: ExExContext<Node>,
+        config: NodeCliConfig,
+    ) -> Result<Self, KonaExExError> {
+        info!("Initializing Kona Node ExEx with mode: {}", config.mode);
+
+        let provider = Self::create_provider(&config)?;
+
+        Ok(Self { ctx, provider, shutdown: CancellationToken::new() })
+    }
+
+    /// Creates buffered provider for L2 chain state caching.
+    fn create_provider(config: &NodeCliConfig) -> Result<BufferedL2Provider, KonaExExError> {
+        let alloy_provider = alloy_provider::RootProvider::new_http(config.l1_eth_rpc.clone());
         let rollup_config = std::sync::Arc::new(Default::default());
         let inner =
             kona_providers_alloy::AlloyL2ChainProvider::new(alloy_provider, rollup_config, 100);
-        let provider = BufferedL2Provider::new(inner, 1000, 64);
-
-        Ok(Self {
-            node: None, // TODO: Initialize RollupNode when proper configuration is available
-            ctx,
-            provider,
-        })
+        Ok(BufferedL2Provider::new(inner, 1000, 64))
     }
 
-    /// Starts the ExEx and returns a future that runs indefinitely.
-    pub fn start(mut self) -> impl Future<Output = anyhow::Result<()>>
+    /// Starts the ExEx main loop.
+    pub fn start(mut self) -> impl Future<Output = Result<(), KonaExExError>>
     where
         Node::Types: NodePrimitives,
     {
         async move {
             info!("Starting Kona Node ExEx");
 
-            // TODO: Start the actual RollupNode when proper configuration is available
-            
-            // Main ExEx processing loop
             let mut last_processed_height: Option<BlockNumber> = None;
 
             loop {
                 tokio::select! {
-                    // Process ExEx notifications from Reth  
                     notification = self.ctx.notifications.next() => {
                         if let Some(notification_result) = notification {
                             match notification_result {
                                 Ok(notification) => {
-                                    if let Err(e) = self.process_notification(notification, &mut last_processed_height).await {
-                                        error!("Failed to process ExEx notification: {}", e);
+                                    if let Err(e) = self.handle_notification(notification, &mut last_processed_height).await {
+                                        error!("Failed to process notification: {}", e);
                                     }
                                 }
                                 Err(e) => {
-                                    error!("Error receiving ExEx notification: {}", e);
+                                    error!("Error receiving notification: {}", e);
                                 }
                             }
                         }
                     }
-
-                    // Handle shutdown signal
-                    _ = tokio::signal::ctrl_c() => {
+                    _ = self.shutdown.cancelled() => {
                         info!("Received shutdown signal");
+                        break;
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        info!("Received ctrl-c, shutting down");
                         break;
                     }
                 }
@@ -102,129 +113,119 @@ where
         }
     }
 
-    /// Process an ExEx notification from Reth.
-    async fn process_notification(
+    /// Processes an ExEx notification from reth.
+    async fn handle_notification(
         &mut self,
         notification: ExExNotification<<Node::Types as NodeTypes>::Primitives>,
         last_processed_height: &mut Option<BlockNumber>,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), KonaExExError>
     where
         <Node::Types as NodeTypes>::Primitives: NodePrimitives,
     {
+        let event = self.convert_notification_to_event(&notification)?;
+        self.provider.handle_chain_event(event).await?;
+
+        let (height, hash, description) = match notification {
+            ExExNotification::ChainCommitted { new } => {
+                let blocks = new.blocks();
+                info!("Processing {} committed blocks", blocks.len());
+
+                let (height, block) =
+                    blocks.iter().max_by_key(|(number, _)| *number).ok_or_else(|| {
+                        KonaExExError::ExEx("No blocks in committed chain".to_string())
+                    })?;
+                (*height, block.hash(), "committed")
+            }
+            ExExNotification::ChainReorged { new, .. } => {
+                let blocks = new.blocks();
+                info!("Processing reorg to {} blocks", blocks.len());
+
+                let (height, block) = blocks
+                    .iter()
+                    .max_by_key(|(number, _)| *number)
+                    .ok_or_else(|| KonaExExError::ExEx("No blocks in reorged chain".to_string()))?;
+                (*height, block.hash(), "reorged")
+            }
+            ExExNotification::ChainReverted { old } => {
+                let blocks = old.blocks();
+                info!("Processing {} reverted blocks", blocks.len());
+
+                let (first_height, first_block) =
+                    blocks.iter().min_by_key(|(number, _)| *number).ok_or_else(|| {
+                        KonaExExError::ExEx("No blocks in reverted chain".to_string())
+                    })?;
+                (first_height.saturating_sub(1), first_block.hash(), "reverted")
+            }
+        };
+
+        *last_processed_height = Some(height);
+
+        let num_hash = (height, hash).into();
+        self.ctx
+            .events
+            .send(ExExEvent::FinishedHeight(num_hash))
+            .map_err(|e| KonaExExError::ExEx(format!("Failed to send FinishedHeight: {}", e)))?;
+
+        info!("Processed {} chain up to block {}", description, height);
+        Ok(())
+    }
+
+    /// Converts ExExNotification to ChainStateEvent.
+    fn convert_notification_to_event(
+        &self,
+        notification: &ExExNotification<<Node::Types as NodeTypes>::Primitives>,
+    ) -> Result<ChainStateEvent, KonaExExError> {
         match notification {
             ExExNotification::ChainCommitted { new } => {
                 let blocks = new.blocks();
-                info!("Processing committed chain with {} blocks", blocks.len());
+                let committed_hashes: Vec<B256> =
+                    blocks.values().map(|b| B256::from(b.hash())).collect();
+                let new_head = blocks
+                    .iter()
+                    .max_by_key(|(n, _)| *n)
+                    .map(|(_, b)| B256::from(b.hash()))
+                    .ok_or_else(|| {
+                        KonaExExError::ExEx("No blocks in committed chain".to_string())
+                    })?;
 
-                // Extract block hashes from the chain
-                let committed_hashes: Vec<B256> = blocks
-                    .values()
-                    .map(|block| B256::from(block.hash()))
-                    .collect();
-
-                // Get the last block by finding the highest block number
-                if let Some((_, last_block)) = blocks.iter().max_by_key(|(number, _)| *number) {
-                    let event = ChainStateEvent::ChainCommitted {
-                        new_head: B256::from(last_block.hash()),
-                        committed: committed_hashes,
-                    };
-                    self.provider.handle_chain_event(event).await?;
-
-                    // Update last processed height
-                    *last_processed_height = Some(last_block.number());
-
-                    // Send FinishedHeight event back to Reth using NumHash (number, hash) tuple
-                    let num_hash = (last_block.number(), last_block.hash()).into();
-                    if let Err(e) = self.ctx.events.send(ExExEvent::FinishedHeight(num_hash)) {
-                        error!("Failed to send FinishedHeight event: {}", e);
-                        return Err(e.into());
-                    }
-
-                    info!("Processed chain up to block {}", last_block.number());
-                }
+                Ok(ChainStateEvent::ChainCommitted { new_head, committed: committed_hashes })
             }
-
             ExExNotification::ChainReorged { old, new } => {
-                let old_blocks = old.blocks();
-                let new_blocks = new.blocks();
-                info!(
-                    "Processing chain reorg (old: {} blocks, new: {} blocks)",
-                    old_blocks.len(),
-                    new_blocks.len()
-                );
+                let old_head = old
+                    .blocks()
+                    .iter()
+                    .max_by_key(|(n, _)| *n)
+                    .map(|(_, b)| B256::from(b.hash()))
+                    .ok_or_else(|| KonaExExError::ExEx("No old blocks in reorg".to_string()))?;
+                let new_head = new
+                    .blocks()
+                    .iter()
+                    .max_by_key(|(n, _)| *n)
+                    .map(|(_, b)| B256::from(b.hash()))
+                    .ok_or_else(|| KonaExExError::ExEx("No new blocks in reorg".to_string()))?;
 
-                // Handle reorg in buffered provider
-                let depth = old_blocks.len() as u64;
-                
-                // Get the last blocks from old and new chains
-                let old_last = old_blocks.iter().max_by_key(|(number, _)| *number);
-                let new_last = new_blocks.iter().max_by_key(|(number, _)| *number);
-                
-                if let (Some((_, old_last_block)), Some((_, new_last_block))) = (old_last, new_last) {
-                    let event = ChainStateEvent::ChainReorged {
-                        old_head: B256::from(old_last_block.hash()),
-                        new_head: B256::from(new_last_block.hash()),
-                        depth,
-                    };
-                    self.provider.handle_chain_event(event).await?;
-
-                    // Update last processed height
-                    *last_processed_height = Some(new_last_block.number());
-
-                    // Send FinishedHeight event back to Reth
-                    let num_hash = (new_last_block.number(), new_last_block.hash()).into();
-                    if let Err(e) = self.ctx.events.send(ExExEvent::FinishedHeight(num_hash)) {
-                        error!("Failed to send FinishedHeight event: {}", e);
-                        return Err(e.into());
-                    }
-
-                    info!("Processed reorg up to block {}", new_last_block.number());
-                }
+                Ok(ChainStateEvent::ChainReorged {
+                    old_head,
+                    new_head,
+                    depth: old.blocks().len() as u64,
+                })
             }
-
             ExExNotification::ChainReverted { old } => {
-                let old_blocks = old.blocks();
-                info!("Processing chain revert with {} blocks", old_blocks.len());
+                let blocks = old.blocks();
+                let old_head = blocks
+                    .iter()
+                    .max_by_key(|(n, _)| *n)
+                    .map(|(_, b)| B256::from(b.hash()))
+                    .ok_or_else(|| KonaExExError::ExEx("No old head in revert".to_string()))?;
+                let new_head = blocks
+                    .iter()
+                    .min_by_key(|(n, _)| *n)
+                    .map(|(_, b)| B256::from(b.hash()))
+                    .ok_or_else(|| KonaExExError::ExEx("No new head in revert".to_string()))?;
+                let reverted: Vec<B256> = blocks.values().map(|b| B256::from(b.hash())).collect();
 
-                // Handle revert in buffered provider
-                let old_last = old_blocks.iter().max_by_key(|(number, _)| *number);
-                let old_first = old_blocks.iter().min_by_key(|(number, _)| *number);
-                
-                if let (Some((_, old_last_block)), Some((_, old_first_block))) = (old_last, old_first) {
-                    let reverted_hashes: Vec<B256> = old_blocks
-                        .values()
-                        .map(|block| B256::from(block.hash()))
-                        .collect();
-
-                    let event = ChainStateEvent::ChainReverted {
-                        old_head: B256::from(old_last_block.hash()),
-                        new_head: B256::from(old_first_block.hash()), // After revert, head goes back to before the reverted blocks
-                        reverted: reverted_hashes,
-                    };
-                    self.provider.handle_chain_event(event).await?;
-
-                    // Update last processed height to the block before the reverted chain
-                    let new_height = old_first_block.number().saturating_sub(1);
-                    *last_processed_height = Some(new_height);
-
-                    // Send FinishedHeight event back to Reth
-                    // Use a placeholder hash since we don't have the actual block at new_height
-                    let num_hash = (new_height, old_first_block.hash()).into();
-                    if let Err(e) = self.ctx.events.send(ExExEvent::FinishedHeight(num_hash)) {
-                        error!("Failed to send FinishedHeight event: {}", e);
-                        return Err(e.into());
-                    }
-
-                    info!("Processed revert back to block {}", new_height);
-                }
+                Ok(ChainStateEvent::ChainReverted { old_head, new_head, reverted })
             }
         }
-
-        Ok(())
     }
-}
-
-/// Helper function to convert reth SealedBlock to information needed by the buffered provider.
-fn extract_block_info(block: &SealedBlock) -> (BlockNumber, B256) {
-    (block.number, B256::from(block.hash()))
 }
