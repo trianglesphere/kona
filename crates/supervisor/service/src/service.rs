@@ -272,23 +272,12 @@ impl Service {
             })
             .collect::<Result<HashMap<ChainId, Arc<ChainDb>>>>()?;
 
-        // Spawn a task that first performs a one-shot startup reorg across all chains,
-        // (does nothing if the reorg is not detected) then starts the L1 watcher streaming loop.
         let database_factory = self.database_factory.clone();
         let cancel_token = self.cancel_token.clone();
         let event_senders = self.chain_event_senders.clone();
         self.join_set.spawn(async move {
-            // Perform one-shot L1 consistency verification at startup to detect any
-            // reorgs that occurred while the supervisor was offline, ensuring all
-            // chains are in sync with the current canonical L1 state before processing.
             let reorg_handler =
                 ReorgHandler::new(l1_rpc.clone(), chain_dbs_map.clone()).with_metrics();
-
-            if let Err(err) = reorg_handler.verify_l1_consistency().await {
-                warn!(target: "supervisor::service", %err, "Startup reorg check failed");
-            } else {
-                info!(target: "supervisor::service", "Startup reorg check completed");
-            }
 
             // Start the L1 watcher streaming loop.
             let l1_watcher = L1Watcher::new(

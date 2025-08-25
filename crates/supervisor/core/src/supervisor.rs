@@ -15,7 +15,7 @@ use kona_supervisor_storage::{
 use kona_supervisor_types::{SuperHead, parse_access_list};
 use op_alloy_rpc_types::SuperchainDAError;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tracing::{error, warn};
 
 use crate::{
@@ -98,7 +98,7 @@ pub struct Supervisor<M> {
 
     // As of now supervisor only supports a single managed node per chain.
     // This is a limitation of the current implementation, but it will be extended in the future.
-    managed_nodes: Mutex<HashMap<ChainId, Arc<M>>>,
+    managed_nodes: RwLock<HashMap<ChainId, Arc<M>>>,
 }
 
 impl<M> Supervisor<M>
@@ -108,7 +108,7 @@ where
     /// Creates a new [`Supervisor`] instance.
     #[allow(clippy::new_without_default, clippy::missing_const_for_fn)]
     pub fn new(config: Arc<Config>, database_factory: Arc<ChainDbFactory>) -> Self {
-        Self { config, database_factory, managed_nodes: Mutex::new(HashMap::new()) }
+        Self { config, database_factory, managed_nodes: RwLock::new(HashMap::new()) }
     }
 
     /// Adds a new managed node to the [`Supervisor`].
@@ -123,7 +123,7 @@ where
             return Err(SupervisorError::UnsupportedChainId);
         }
 
-        let mut managed_nodes = self.managed_nodes.lock().await;
+        let mut managed_nodes = self.managed_nodes.write().await;
         if managed_nodes.contains_key(&chain_id) {
             warn!(target: "supervisor::service", %chain_id, "Managed node already exists for chain");
             return Ok(());
@@ -244,7 +244,7 @@ where
 
         for id in chain_ids {
             let managed_node = {
-                let guard = self.managed_nodes.lock().await;
+                let guard = self.managed_nodes.read().await;
                 match guard.get(id) {
                     Some(m) => m.clone(),
                     None => {
