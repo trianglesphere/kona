@@ -51,3 +51,8 @@ pub use buffer::{CacheStats, CachedBlock, ChainBufferError, ChainStateBuffer, Ch
 
 mod buffered;
 pub use buffered::{BufferedL2Provider, BufferedProviderError};
+
+#[cfg(feature = "metrics")]
+mod metrics;
+#[cfg(feature = "metrics")]
+pub use metrics::Metrics;

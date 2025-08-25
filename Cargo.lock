@@ -5008,13 +5008,15 @@ dependencies = [
  "async-trait",
  "kona-derive",
  "kona-genesis",
+ "kona-macros",
  "kona-protocol",
  "lru 0.16.0",
+ "metrics",
  "op-alloy-consensus",
  "op-alloy-network",
+ "rstest",
  "thiserror 2.0.16",
  "tokio",
- "tracing",
 ]
 
 [[package]]

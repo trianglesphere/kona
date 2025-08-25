@@ -14,7 +14,6 @@ use kona_protocol::{BatchValidationProvider, L2BlockInfo, to_system_config};
 use op_alloy_consensus::OpBlock;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::debug;
 
 /// A buffered L2 provider that serves data from in-memory chain state.
 ///
@@ -74,7 +73,13 @@ impl BufferedL2Provider {
         &self,
         event: ChainStateEvent,
     ) -> Result<(), BufferedProviderError> {
-        debug!("Handling chain event: {:?}", event);
+        // Track metrics for chain events
+        #[cfg(feature = "metrics")]
+        let event_type = match &event {
+            ChainStateEvent::ChainCommitted { .. } => "committed",
+            ChainStateEvent::ChainReorged { .. } => "reorged",
+            ChainStateEvent::ChainReverted { .. } => "reverted",
+        };
 
         // Update our tracked head based on the event
         match &event {
@@ -87,9 +92,19 @@ impl BufferedL2Provider {
         }
 
         // Handle the event in the buffer
-        self.buffer.handle_event(event).await.map_err(BufferedProviderError::Buffer)?;
+        let result = self.buffer.handle_event(event).await.map_err(BufferedProviderError::Buffer);
 
-        Ok(())
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            if result.is_ok() {
+                kona_macros::inc!(gauge, Metrics::CHAIN_EVENTS_PROCESSED, "event" => event_type);
+            } else {
+                kona_macros::inc!(gauge, Metrics::CHAIN_EVENT_ERRORS, "event" => event_type);
+            }
+        }
+
+        result
     }
 
     /// Add a block to the buffer.
@@ -108,6 +123,13 @@ impl BufferedL2Provider {
     ) -> Result<(), BufferedProviderError> {
         let cached_block = CachedBlock::new(block, l2_block_info);
         self.buffer.insert_block(cached_block).await;
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            kona_macros::inc!(gauge, Metrics::BLOCKS_ADDED);
+        }
+        
         Ok(())
     }
 
@@ -150,8 +172,6 @@ impl L2ChainProvider for BufferedL2Provider {
         number: u64,
         rollup_config: Arc<RollupConfig>,
     ) -> Result<SystemConfig, <Self as L2ChainProvider>::Error> {
-        debug!(block_number = number, "Fetching system config by number");
-
         // Check if this is the genesis block
         if number == self.genesis.l2.number {
             return self.genesis.system_config.ok_or(BufferedProviderError::SystemConfigMissing);
@@ -161,8 +181,19 @@ impl L2ChainProvider for BufferedL2Provider {
         let cached_block = self
             .buffer
             .get_block_by_number(number)
-            .await
-            .ok_or(BufferedProviderError::BlockNotFound(number))?;
+            .await;
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            if cached_block.is_some() {
+                kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_HITS, "method" => "system_config");
+            } else {
+                kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_MISSES, "method" => "system_config");
+            }
+        }
+        
+        let cached_block = cached_block.ok_or(BufferedProviderError::BlockNotFound(number))?;
 
         // Extract system config from the block
         to_system_config(&cached_block.block, &rollup_config)
@@ -175,21 +206,28 @@ impl BatchValidationProvider for BufferedL2Provider {
     type Error = BufferedProviderError;
 
     async fn block_by_number(&mut self, number: u64) -> Result<OpBlock, Self::Error> {
-        debug!(block_number = number, "Fetching full block by number for batch validation");
-
         // Get the block from cache
         let cached_block = self
             .buffer
             .get_block_by_number(number)
-            .await
-            .ok_or(BufferedProviderError::BlockNotFound(number))?;
+            .await;
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            if cached_block.is_some() {
+                kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_HITS, "method" => "block_by_number");
+            } else {
+                kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_MISSES, "method" => "block_by_number");
+            }
+        }
+        
+        let cached_block = cached_block.ok_or(BufferedProviderError::BlockNotFound(number))?;
 
         Ok(cached_block.block.clone())
     }
 
     async fn l2_block_info_by_number(&mut self, number: u64) -> Result<L2BlockInfo, Self::Error> {
-        debug!(block_number = number, "Fetching L2 block info by number");
-
         // Check if this is the genesis block
         if number == self.genesis.l2.number {
             return L2BlockInfo::from_block_and_genesis(
@@ -203,8 +241,19 @@ impl BatchValidationProvider for BufferedL2Provider {
         let cached_block = self
             .buffer
             .get_block_by_number(number)
-            .await
-            .ok_or(BufferedProviderError::BlockNotFound(number))?;
+            .await;
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            if cached_block.is_some() {
+                kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_HITS, "method" => "l2_block_info");
+            } else {
+                kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_MISSES, "method" => "l2_block_info");
+            }
+        }
+        
+        let cached_block = cached_block.ok_or(BufferedProviderError::BlockNotFound(number))?;
 
         Ok(cached_block.l2_block_info.clone())
     }

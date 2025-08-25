@@ -12,11 +12,15 @@ categories.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 # Kona
 kona-derive.workspace = true
 kona-genesis.workspace = true
 kona-protocol.workspace = true
+kona-macros.workspace = true
 
 # Alloy
 alloy-consensus.workspace = true
@@ -33,10 +37,14 @@ async-trait.workspace = true
 lru.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
-tracing.workspace = true
+
+# `metrics` feature
+metrics = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
+rstest.workspace = true
 
 [features]
 default = []
+metrics = [ "dep:metrics", "kona-derive/metrics" ]

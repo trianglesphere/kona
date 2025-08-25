@@ -27,10 +27,10 @@ The buffered provider operates as a standalone in-memory data store:
 
 ## Usage
 
-```rust
+```rust,ignore
 use kona_providers_local::{BufferedL2Provider, ChainStateEvent};
 use kona_genesis::RollupConfig;
-use kona_protocol::L2BlockInfo;
+use kona_protocol::{BatchValidationProvider, L2BlockInfo};
 use op_alloy_consensus::OpBlock;
 use std::sync::Arc;
 
@@ -40,8 +40,9 @@ async fn example() -> Result<(), Box<dyn std::error::Error>> {
     let provider = BufferedL2Provider::new(rollup_config, 1000, 64);
 
     // Add blocks to the provider
-    let block: OpBlock = // ... obtain block from execution extension or other source
-    let l2_info: L2BlockInfo = // ... derive L2 block info from the block
+    // In practice, these would come from execution extension or other sources
+    let block: OpBlock = unimplemented!();
+    let l2_info: L2BlockInfo = unimplemented!();
     provider.add_block(block, l2_info).await?;
 
     // Handle chain events from execution extension notifications

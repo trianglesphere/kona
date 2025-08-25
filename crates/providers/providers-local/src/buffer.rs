@@ -10,7 +10,6 @@ use lru::LruCache;
 use op_alloy_consensus::OpBlock;
 use std::num::NonZeroUsize;
 use tokio::sync::RwLock;
-use tracing::{debug, warn};
 
 /// Events that can affect chain state
 #[derive(Debug, Clone)]
@@ -142,18 +141,18 @@ impl ChainStateBuffer {
         let hash = block.hash();
         let number = block.number();
 
-        debug!(
-            block_hash = %hash,
-            block_number = number,
-            canonical = block.canonical,
-            "Inserting block into cache"
-        );
-
         let mut blocks_by_hash = self.blocks_by_hash.write().await;
         let mut blocks_by_number = self.blocks_by_number.write().await;
 
         blocks_by_hash.put(hash, block);
         blocks_by_number.put(number, hash);
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            kona_macros::set!(gauge, Metrics::CACHE_ENTRIES, "cache", "blocks_by_hash", blocks_by_hash.len() as f64);
+            kona_macros::set!(gauge, Metrics::CACHE_ENTRIES, "cache", "blocks_by_number", blocks_by_number.len() as f64);
+        }
     }
 
     /// Handle a chain state event
@@ -177,11 +176,6 @@ impl ChainStateBuffer {
         new_head: B256,
         committed: Vec<B256>,
     ) -> Result<(), ChainBufferError> {
-        debug!(
-            new_head = %new_head,
-            committed_count = committed.len(),
-            "Handling chain committed event"
-        );
 
         // Update canonical head
         let mut canonical_head = self.canonical_head.write().await;
@@ -201,20 +195,19 @@ impl ChainStateBuffer {
     /// Handle chain reorged event
     async fn handle_chain_reorged(
         &self,
-        old_head: B256,
+        _old_head: B256,
         new_head: B256,
         depth: u64,
     ) -> Result<(), ChainBufferError> {
-        warn!(
-            old_head = %old_head,
-            new_head = %new_head,
-            depth = depth,
-            max_depth = self.max_reorg_depth,
-            "Handling chain reorg event"
-        );
 
         if depth > self.max_reorg_depth {
             return Err(ChainBufferError::ReorgTooDeep { depth, max_depth: self.max_reorg_depth });
+        }
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            kona_macros::set!(gauge, Metrics::REORG_DEPTH, depth as f64);
         }
 
         // Update canonical head
@@ -224,11 +217,16 @@ impl ChainStateBuffer {
         // We need to invalidate cached blocks that are no longer canonical
         // For now, we'll clear the entire cache on deep reorgs
         if depth > 10 {
-            warn!(depth = depth, "Deep reorg detected, clearing cache");
             let mut blocks_by_hash = self.blocks_by_hash.write().await;
             let mut blocks_by_number = self.blocks_by_number.write().await;
             blocks_by_hash.clear();
             blocks_by_number.clear();
+            
+            #[cfg(feature = "metrics")]
+            {
+                use crate::Metrics;
+                kona_macros::inc!(gauge, Metrics::CACHE_CLEARS);
+            }
         }
 
         Ok(())
@@ -237,16 +235,10 @@ impl ChainStateBuffer {
     /// Handle chain reverted event
     async fn handle_chain_reverted(
         &self,
-        old_head: B256,
+        _old_head: B256,
         new_head: B256,
         reverted: Vec<B256>,
     ) -> Result<(), ChainBufferError> {
-        warn!(
-            old_head = %old_head,
-            new_head = %new_head,
-            reverted_count = reverted.len(),
-            "Handling chain reverted event"
-        );
 
         // Update canonical head
         let mut canonical_head = self.canonical_head.write().await;
@@ -289,8 +281,14 @@ impl ChainStateBuffer {
         blocks_by_hash.clear();
         blocks_by_number.clear();
         *canonical_head = None;
-
-        debug!("Cleared chain state buffer cache");
+        
+        #[cfg(feature = "metrics")]
+        {
+            use crate::Metrics;
+            kona_macros::inc!(gauge, Metrics::CACHE_CLEARS);
+            kona_macros::set!(gauge, Metrics::CACHE_ENTRIES, "cache", "blocks_by_hash", 0);
+            kona_macros::set!(gauge, Metrics::CACHE_ENTRIES, "cache", "blocks_by_number", 0);
+        }
     }
 }
 
