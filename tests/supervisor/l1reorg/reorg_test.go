@@ -5,20 +5,23 @@ import (
 	"time"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
-	"github.com/ethereum-optimism/optimism/op-devstack/presets"
+	"github.com/ethereum-optimism/optimism/op-service/apis"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
+	"github.com/ethereum-optimism/optimism/op-test-sequencer/sequencer/seqtypes"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/op-rs/kona/supervisor/presets"
 	"github.com/op-rs/kona/supervisor/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type checksFunc func(t devtest.T, sys *presets.SimpleInterop)
+type checksFunc func(t devtest.T, sys *presets.SimpleInteropForL1Reorg)
 
 func TestL1Reorg(gt *testing.T) {
 	gt.Run("unsafe reorg", func(gt *testing.T) {
 		var crossSafeRef, localSafeRef, unsafeRef, reorgAfter eth.BlockID
-		pre := func(t devtest.T, sys *presets.SimpleInterop) {
+		pre := func(t devtest.T, sys *presets.SimpleInteropForL1Reorg) {
 			ss := sys.Supervisor.FetchSyncStatus()
 
 			crossSafeRef = ss.Chains[sys.L2ChainA.ChainID()].CrossSafe
@@ -31,7 +34,7 @@ func TestL1Reorg(gt *testing.T) {
 			assert.Nil(gt, err, "Failed to query cross derived to source")
 			reorgAfter = blockRef.ID()
 		}
-		post := func(t devtest.T, sys *presets.SimpleInterop) {
+		post := func(t devtest.T, sys *presets.SimpleInteropForL1Reorg) {
 			require.True(t, sys.L2ELA.IsCanonical(crossSafeRef), "Previous cross-safe block should still be canonical")
 			require.True(t, sys.L2ELA.IsCanonical(localSafeRef), "Previous local-safe block should still be canonical")
 			require.False(t, sys.L2ELA.IsCanonical(unsafeRef), "Previous unsafe block should have been reorged")
@@ -44,16 +47,17 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, reorgAfter *eth.BlockID, preChecks, 
 	t := devtest.SerialT(gt)
 	ctx := t.Ctx()
 
-	sys := presets.NewSimpleInterop(t)
+	sys := presets.NewSimpleInteropForL1Reorg(t)
+	ts := sys.TestSequencer.ControlAPI(sys.L1Network.ChainID())
 	trm := utils.NewTestReorgManager(t)
 
 	sys.L1Network.WaitForBlock()
 
-	trm.StopL1CL()
+	//trm.StopL1CL()
 
 	// sequence some l1 blocks initially
 	for range 10 {
-		trm.GetBlockBuilder().BuildBlock(ctx, nil)
+		sequenceL1Block(t, ts, common.Hash{})
 		time.Sleep(5 * time.Second)
 	}
 
@@ -78,7 +82,7 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, reorgAfter *eth.BlockID, preChecks, 
 
 	// reorg the L1 chain -- sequence an alternative L1 block from divergence block parent
 	t.Log("Building Divergence Chain from:", divergence)
-	trm.GetBlockBuilder().BuildBlock(ctx, &divergence.ParentHash)
+	sequenceL1Block(t, ts, divergence.ParentHash)
 
 	t.Log("Stopping the batchers")
 	sys.L2BatcherA.Stop()
@@ -146,4 +150,9 @@ func testL2ReorgAfterL1Reorg(gt *testing.T, reorgAfter *eth.BlockID, preChecks, 
 
 	// post reorg test validations and checks
 	postChecks(t, sys)
+}
+
+func sequenceL1Block(t devtest.T, ts apis.TestSequencerControlAPI, parent common.Hash) {
+	require.NoError(t, ts.New(t.Ctx(), seqtypes.BuildOpts{Parent: parent}))
+	require.NoError(t, ts.Next(t.Ctx()))
 }
