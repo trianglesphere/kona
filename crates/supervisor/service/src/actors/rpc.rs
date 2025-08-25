@@ -28,7 +28,7 @@ where
         info!(
           target: "supervisor::rpc_actor",
           addr = %self.rpc_addr,
-          "Starting Supervisor RPC Actor",
+          "RPC server bound to address",
         );
 
         // let supervisor_rpc = SupervisorRpc::new(self.supervisor.clone());

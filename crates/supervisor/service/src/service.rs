@@ -122,6 +122,7 @@ impl Service {
     }
 
     async fn init_managed_node(&mut self, config: &ClientConfig) -> Result<()> {
+        info!(target: "supervisor::service", node = %config.url, "Initialising managed node...");
         let url = Url::parse(&self.config.l1_rpc).map_err(|err| {
             error!(target: "supervisor::service", %err, "Failed to parse L1 RPC URL");
             anyhow::anyhow!("failed to parse L1 RPC URL: {err}")
@@ -191,8 +192,6 @@ impl Service {
     }
 
     async fn init_managed_nodes(&mut self) -> Result<()> {
-        info!(target: "supervisor::service", "Initialising managed nodes for all chains...");
-
         let configs = self.config.l2_consensus_nodes_config.clone();
         for config in configs.iter() {
             self.init_managed_node(config).await?;
