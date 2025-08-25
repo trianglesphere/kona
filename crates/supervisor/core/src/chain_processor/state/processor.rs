@@ -1,10 +1,14 @@
 use kona_interop::DerivedRefPair;
+use kona_supervisor_types::SuperHead;
 
 /// This module contains the state management for the chain processor.
 /// It provides a way to track the invalidated blocks and manage the state of the chain processor
 #[derive(Debug, Default)]
 pub struct ProcessorState {
-    invalidated_block: Option<DerivedRefPair>,
+    /// Tracks current invalidated block.
+    pub invalidated_block: Option<DerivedRefPair>,
+    /// Tracks the super head of the chain.
+    pub super_head: SuperHead,
 }
 
 impl ProcessorState {
@@ -37,4 +41,25 @@ impl ProcessorState {
     pub const fn clear_invalidated(&mut self) {
         self.invalidated_block = None;
     }
+}
+
+/// Represents the different types of state updates that can be applied to the chain processor.
+#[derive(Debug)]
+pub enum ProcesssorStateUpdate {
+    /// Local unsafe update.
+    LocalUnsafe,
+    /// Local safe update.
+    LocalSafe,
+    /// Cross unsafe update.
+    CrossUnsafe,
+    /// Cross safe update.
+    CrossSafe,
+    /// Finalized update.
+    Finalized,
+    /// Invalidate block update.
+    InvalidateBlock,
+    /// Block replaced update.
+    BlockReplaced,
+    /// L1 source update.
+    L1Source,
 }

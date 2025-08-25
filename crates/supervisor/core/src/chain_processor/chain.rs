@@ -1,20 +1,22 @@
-use super::handlers::{
-    CrossSafeHandler, CrossUnsafeHandler, EventHandler, FinalizedHandler, InvalidationHandler,
-    OriginHandler, ReplacementHandler, SafeBlockHandler, UnsafeBlockHandler,
+use super::{
+    handlers::{
+        CrossSafeHandler, CrossUnsafeHandler, EventHandler, FinalizedHandler, InvalidationHandler,
+        OriginHandler, ReplacementHandler, SafeBlockHandler, UnsafeBlockHandler,
+    },
+    state::{ProcessorState, ProcesssorStateUpdate},
 };
 use crate::{
-    LogIndexer, ProcessorState,
+    LogIndexer,
     event::ChainEvent,
     syncnode::{BlockProvider, ManagedNodeCommand},
 };
 use alloy_primitives::ChainId;
 use kona_interop::InteropValidator;
-use kona_supervisor_storage::{
-    DerivationStorage, HeadRefStorageWriter, LogStorage, StorageRewinder,
-};
+use kona_protocol::BlockInfo;
+use kona_supervisor_storage::{DerivationStorage, HeadRefStorage, LogStorage, StorageRewinder};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::mpsc;
-use tracing::debug;
+use tracing::{debug, info, warn};
 
 /// Represents a task that processes chain events from a managed node.
 /// It listens for events emitted by the managed node and handles them accordingly.
@@ -41,7 +43,7 @@ impl<P, W, V> ChainProcessor<P, W, V>
 where
     P: BlockProvider + 'static,
     V: InteropValidator + 'static,
-    W: LogStorage + DerivationStorage + HeadRefStorageWriter + StorageRewinder + 'static,
+    W: LogStorage + DerivationStorage + HeadRefStorage + StorageRewinder + 'static,
 {
     /// Creates a new [`ChainProcessor`].
     pub fn new(
@@ -78,15 +80,27 @@ where
             ReplacementHandler::new(chain_id, log_indexer, db_provider.clone());
 
         let finalized_handler =
-            FinalizedHandler::new(chain_id, managed_node_sender.clone(), db_provider);
+            FinalizedHandler::new(chain_id, managed_node_sender.clone(), db_provider.clone());
         let cross_unsafe_handler = CrossUnsafeHandler::new(chain_id, managed_node_sender.clone());
         let cross_safe_handler = CrossSafeHandler::new(chain_id, managed_node_sender);
+
+        let super_head = db_provider
+            .get_super_head()
+            .map_err(|err| {
+                warn!(
+                    target: "supervisor::chain_processor",
+                    chain_id = chain_id,
+                    %err,
+                    "Failed to get super head on chain processor initialization"
+                );
+            })
+            .unwrap_or_default();
 
         Self {
             chain_id,
             metrics_enabled: None,
 
-            state: ProcessorState::new(),
+            state: ProcessorState { super_head, invalidated_block: None },
 
             // Handlers for different types of chain events.
             unsafe_handler,
@@ -109,34 +123,43 @@ where
 
     /// Handles a chain event by delegating it to the appropriate handler.
     pub async fn handle_event(&mut self, event: ChainEvent) {
-        let result = match event {
-            ChainEvent::UnsafeBlock { block } => {
-                self.unsafe_handler.handle(block, &mut self.state).await
-            }
-            ChainEvent::DerivedBlock { derived_ref_pair } => {
-                self.safe_handler.handle(derived_ref_pair, &mut self.state).await
-            }
-            ChainEvent::DerivationOriginUpdate { origin } => {
-                self.origin_handler.handle(origin, &mut self.state).await
-            }
-            ChainEvent::InvalidateBlock { block } => {
-                self.invalidation_handler.handle(block, &mut self.state).await
-            }
-            ChainEvent::BlockReplaced { replacement } => {
-                self.replacement_handler.handle(replacement, &mut self.state).await
-            }
-            ChainEvent::FinalizedSourceUpdate { finalized_source_block } => {
-                self.finalized_handler.handle(finalized_source_block, &mut self.state).await
-            }
-            ChainEvent::CrossUnsafeUpdate { block } => {
-                self.cross_unsafe_handler.handle(block, &mut self.state).await
-            }
-            ChainEvent::CrossSafeUpdate { derived_ref_pair } => {
-                self.cross_safe_handler.handle(derived_ref_pair, &mut self.state).await
-            }
+        let (result, head_update) = match event {
+            ChainEvent::UnsafeBlock { block } => (
+                self.unsafe_handler.handle(block, &mut self.state).await,
+                ProcesssorStateUpdate::LocalUnsafe,
+            ),
+            ChainEvent::DerivedBlock { derived_ref_pair } => (
+                self.safe_handler.handle(derived_ref_pair, &mut self.state).await,
+                ProcesssorStateUpdate::LocalSafe,
+            ),
+            ChainEvent::DerivationOriginUpdate { origin } => (
+                self.origin_handler.handle(origin, &mut self.state).await,
+                ProcesssorStateUpdate::L1Source,
+            ),
+            ChainEvent::InvalidateBlock { block } => (
+                self.invalidation_handler.handle(block, &mut self.state).await,
+                ProcesssorStateUpdate::InvalidateBlock,
+            ),
+            ChainEvent::BlockReplaced { replacement } => (
+                self.replacement_handler.handle(replacement, &mut self.state).await,
+                ProcesssorStateUpdate::BlockReplaced,
+            ),
+            ChainEvent::FinalizedSourceUpdate { finalized_source_block } => (
+                self.finalized_handler.handle(finalized_source_block, &mut self.state).await,
+                ProcesssorStateUpdate::Finalized, /* Finalized handler returns the derived block
+                                                   * on success */
+            ),
+            ChainEvent::CrossUnsafeUpdate { block } => (
+                self.cross_unsafe_handler.handle(block, &mut self.state).await,
+                ProcesssorStateUpdate::CrossUnsafe,
+            ),
+            ChainEvent::CrossSafeUpdate { derived_ref_pair } => (
+                self.cross_safe_handler.handle(derived_ref_pair, &mut self.state).await,
+                ProcesssorStateUpdate::CrossSafe,
+            ),
         };
 
-        if let Err(err) = result {
+        if let Err(err) = &result {
             debug!(
                 target: "supervisor::chain_processor",
                 chain_id = self.chain_id,
@@ -145,5 +168,55 @@ where
                 "Failed to process event"
             );
         }
+
+        if let Ok(block) = result {
+            self.apply_state_update(head_update, block);
+        }
+    }
+
+    fn apply_state_update(&mut self, update: ProcesssorStateUpdate, block: BlockInfo) {
+        match update {
+            ProcesssorStateUpdate::LocalUnsafe => {
+                self.state.super_head.local_unsafe = block;
+                self.log_state_update("LocalUnsafe", &block);
+            }
+            ProcesssorStateUpdate::LocalSafe => {
+                self.state.super_head.local_safe = Some(block);
+                self.log_state_update("LocalSafe", &block);
+            }
+            ProcesssorStateUpdate::CrossUnsafe => {
+                self.state.super_head.cross_unsafe = Some(block);
+                self.log_state_update("CrossUnsafe", &block);
+            }
+            ProcesssorStateUpdate::CrossSafe => {
+                self.state.super_head.cross_safe = Some(block);
+                self.log_state_update("CrossSafe", &block);
+            }
+            ProcesssorStateUpdate::Finalized => {
+                self.state.super_head.finalized = Some(block);
+                self.log_state_update("Finalized", &block);
+            }
+            ProcesssorStateUpdate::L1Source => {
+                self.state.super_head.l1_source = Some(block);
+                self.log_state_update("L1Source", &block);
+            }
+            ProcesssorStateUpdate::InvalidateBlock => {
+                self.log_state_update("InvalidateBlock", &block);
+            }
+            ProcesssorStateUpdate::BlockReplaced => {
+                self.log_state_update("BlockReplaced", &block);
+            }
+        }
+    }
+
+    fn log_state_update(&self, update: &str, block: &BlockInfo) {
+        info!(
+            target: "supervisor::chain_processor",
+            chain_id = self.chain_id,
+            update_event = %update,
+            block_number = block.number,
+            block_hash = %block.hash,
+            "Chain processor state updated."
+        );
     }
 }

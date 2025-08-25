@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use kona_interop::InteropValidator;
 use kona_supervisor_core::{ChainProcessor, event::ChainEvent, syncnode::BlockProvider};
 use kona_supervisor_storage::{
-    DerivationStorage, HeadRefStorageWriter, LogStorage, StorageRewinder,
+    DerivationStorage, HeadRefStorage, HeadRefStorageWriter, LogStorage, StorageRewinder,
 };
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -41,7 +41,7 @@ impl<P, W, V> SupervisorActor for ChainProcessorActor<P, W, V>
 where
     P: BlockProvider + 'static,
     V: InteropValidator + 'static,
-    W: LogStorage + DerivationStorage + HeadRefStorageWriter + StorageRewinder + 'static,
+    W: LogStorage + DerivationStorage + HeadRefStorage + StorageRewinder + 'static,
 {
     type InboundEvent = ChainEvent;
     type Error = ChainProcessorActorError;
@@ -92,16 +92,16 @@ mod tests {
     use crate::SupervisorActor;
     use alloy_eips::BlockNumHash;
     use alloy_primitives::{B256, ChainId};
-    use kona_interop::{DerivedRefPair, InteropValidationError};
+    use kona_interop::{DerivedRefPair, InteropValidationError, SafetyLevel};
     use kona_protocol::BlockInfo;
     use kona_supervisor_core::syncnode::{
         BlockProvider, ManagedNodeCommand, ManagedNodeDataProvider, ManagedNodeError,
     };
     use kona_supervisor_storage::{
-        DerivationStorageReader, DerivationStorageWriter, HeadRefStorageWriter, LogStorageReader,
-        LogStorageWriter, StorageError, StorageRewinder,
+        DerivationStorageReader, DerivationStorageWriter, HeadRefStorageReader,
+        HeadRefStorageWriter, LogStorageReader, LogStorageWriter, StorageError, StorageRewinder,
     };
-    use kona_supervisor_types::{Log, OutputV0, Receipts};
+    use kona_supervisor_types::{Log, OutputV0, Receipts, SuperHead};
     use mockall::{mock, predicate::*};
     use std::sync::Arc;
     use tokio::sync::mpsc;
@@ -185,6 +185,11 @@ mod tests {
             ) -> Result<(), StorageError>;
         }
 
+        impl HeadRefStorageReader for Db {
+            fn get_safety_head_ref(&self, safety_level: SafetyLevel) -> Result<BlockInfo, StorageError>;
+            fn get_super_head(&self) -> Result<SuperHead, StorageError>;
+        }
+
         impl HeadRefStorageWriter for Db {
             fn update_finalized_using_source(
                 &self,
@@ -232,9 +237,11 @@ mod tests {
     #[tokio::test]
     async fn test_actor_handles_event() {
         let mock_node = MockNode::new();
-        let mock_db = MockDb::new();
+        let mut mock_db = MockDb::new();
         let validator = MockValidator::new();
         let (mn_sender, mut mn_receiver) = mpsc::channel(1);
+
+        mock_db.expect_get_super_head().returning(|| Ok(SuperHead::default()));
 
         let processor = ChainProcessor::new(
             Arc::new(validator),
@@ -278,9 +285,11 @@ mod tests {
     #[tokio::test]
     async fn test_actor_receiver_closed() {
         let mock_node = MockNode::new();
-        let mock_db = MockDb::new();
+        let mut mock_db = MockDb::new();
         let validator = MockValidator::new();
         let (mn_sender, _mn_receiver) = mpsc::channel(1);
+
+        mock_db.expect_get_super_head().returning(|| Ok(SuperHead::default()));
 
         let processor = ChainProcessor::new(
             Arc::new(validator),
@@ -303,9 +312,11 @@ mod tests {
     #[tokio::test]
     async fn test_actor_cancellation() {
         let mock_node = MockNode::new();
-        let mock_db = MockDb::new();
+        let mut mock_db = MockDb::new();
         let validator = MockValidator::new();
         let (mn_sender, _mn_receiver) = mpsc::channel(1);
+        
+        mock_db.expect_get_super_head().returning(|| Ok(SuperHead::default()));
 
         let processor = ChainProcessor::new(
             Arc::new(validator),
