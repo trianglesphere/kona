@@ -173,7 +173,7 @@ func (s *L1TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.
 
 	// Start payload build
 	var fcResult engine.ForkChoiceResponse
-	err = s.engineClient.CallContext(ctx, &fcResult, "engine_forkchoiceUpdatedV3", []interface{}{fcState, payloadAttrs})
+	err = s.engineClient.CallContext(ctx, &fcResult, "engine_forkchoiceUpdatedV3", fcState, payloadAttrs)
 	if err != nil {
 		s.t.Errorf("forkchoiceUpdated failed: %v", err)
 		return
@@ -191,7 +191,7 @@ func (s *L1TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.
 
 	// Get payload
 	var envelope engine.ExecutionPayloadEnvelope
-	err = s.engineClient.CallContext(ctx, &envelope, "engine_getPayloadV3", []interface{}{fcResult.PayloadID})
+	err = s.engineClient.CallContext(ctx, &envelope, "engine_getPayloadV3", fcResult.PayloadID)
 	if err != nil {
 		s.t.Errorf("getPayload failed: %v", err)
 		return
@@ -218,7 +218,7 @@ func (s *L1TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.
 	// Insert
 	var npRes engine.PayloadStatusV1
 	err = s.engineClient.CallContext(ctx, &npRes, "engine_newPayloadV3",
-		[]interface{}{envelope.ExecutionPayload, blobHashes, payloadAttrs.BeaconRoot})
+		envelope.ExecutionPayload, blobHashes, payloadAttrs.BeaconRoot)
 	if err != nil {
 		s.t.Errorf("newPayload failed: %v", err)
 		return
@@ -235,7 +235,7 @@ func (s *L1TestBlockBuilder) BuildBlock(ctx context.Context, parentHash *common.
 		FinalizedBlockHash: finalizedBlock.Hash(),
 	}
 
-	err = s.engineClient.CallContext(ctx, &npRes, "engine_forkchoiceUpdatedV3", []interface{}{updateFc, nil})
+	err = s.engineClient.CallContext(ctx, &npRes, "engine_forkchoiceUpdatedV3", updateFc, nil)
 	if err != nil {
 		s.t.Errorf("forkchoiceUpdated failed after newPayload: %v", err)
 		return
