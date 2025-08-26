@@ -131,7 +131,7 @@ func TestPreNoInbox(gt *testing.T) {
 		interopTime := net.Escape().ChainConfig().InteropTime
 
 		_, err := sys.Supervisor.Escape().QueryAPI().SyncStatus(t.Ctx())
-		require.ErrorContains(err, "supervisor status tracker not ready")
+		require.ErrorContains(err, "chain database is not initialized")
 
 		// confirm we are still pre-interop
 		require.False(net.IsActivated(*interopTime))
