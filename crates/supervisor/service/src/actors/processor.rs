@@ -315,7 +315,7 @@ mod tests {
         let mut mock_db = MockDb::new();
         let validator = MockValidator::new();
         let (mn_sender, _mn_receiver) = mpsc::channel(1);
-        
+
         mock_db.expect_get_super_head().returning(|| Ok(SuperHead::default()));
 
         let processor = ChainProcessor::new(

@@ -3,7 +3,7 @@ use super::{
         CrossSafeHandler, CrossUnsafeHandler, EventHandler, FinalizedHandler, InvalidationHandler,
         OriginHandler, ReplacementHandler, SafeBlockHandler, UnsafeBlockHandler,
     },
-    state::{ProcessorState, ProcesssorStateUpdate},
+    state::{ProcessorState, ProcessorStateUpdate},
 };
 use crate::{
     LogIndexer,
@@ -126,36 +126,36 @@ where
         let (result, head_update) = match event {
             ChainEvent::UnsafeBlock { block } => (
                 self.unsafe_handler.handle(block, &mut self.state).await,
-                ProcesssorStateUpdate::LocalUnsafe,
+                ProcessorStateUpdate::LocalUnsafe,
             ),
             ChainEvent::DerivedBlock { derived_ref_pair } => (
                 self.safe_handler.handle(derived_ref_pair, &mut self.state).await,
-                ProcesssorStateUpdate::LocalSafe,
+                ProcessorStateUpdate::LocalSafe,
             ),
             ChainEvent::DerivationOriginUpdate { origin } => (
                 self.origin_handler.handle(origin, &mut self.state).await,
-                ProcesssorStateUpdate::L1Source,
+                ProcessorStateUpdate::L1Source,
             ),
             ChainEvent::InvalidateBlock { block } => (
                 self.invalidation_handler.handle(block, &mut self.state).await,
-                ProcesssorStateUpdate::InvalidateBlock,
+                ProcessorStateUpdate::InvalidateBlock,
             ),
             ChainEvent::BlockReplaced { replacement } => (
                 self.replacement_handler.handle(replacement, &mut self.state).await,
-                ProcesssorStateUpdate::BlockReplaced,
+                ProcessorStateUpdate::BlockReplaced,
             ),
             ChainEvent::FinalizedSourceUpdate { finalized_source_block } => (
                 self.finalized_handler.handle(finalized_source_block, &mut self.state).await,
-                ProcesssorStateUpdate::Finalized, /* Finalized handler returns the derived block
-                                                   * on success */
+                ProcessorStateUpdate::Finalized, /* Finalized handler returns the derived block
+                                                  * on success */
             ),
             ChainEvent::CrossUnsafeUpdate { block } => (
                 self.cross_unsafe_handler.handle(block, &mut self.state).await,
-                ProcesssorStateUpdate::CrossUnsafe,
+                ProcessorStateUpdate::CrossUnsafe,
             ),
             ChainEvent::CrossSafeUpdate { derived_ref_pair } => (
                 self.cross_safe_handler.handle(derived_ref_pair, &mut self.state).await,
-                ProcesssorStateUpdate::CrossSafe,
+                ProcessorStateUpdate::CrossSafe,
             ),
         };
 
@@ -174,36 +174,36 @@ where
         }
     }
 
-    fn apply_state_update(&mut self, update: ProcesssorStateUpdate, block: BlockInfo) {
+    fn apply_state_update(&mut self, update: ProcessorStateUpdate, block: BlockInfo) {
         match update {
-            ProcesssorStateUpdate::LocalUnsafe => {
+            ProcessorStateUpdate::LocalUnsafe => {
                 self.state.super_head.local_unsafe = block;
                 self.log_state_update("LocalUnsafe", &block);
             }
-            ProcesssorStateUpdate::LocalSafe => {
+            ProcessorStateUpdate::LocalSafe => {
                 self.state.super_head.local_safe = Some(block);
                 self.log_state_update("LocalSafe", &block);
             }
-            ProcesssorStateUpdate::CrossUnsafe => {
+            ProcessorStateUpdate::CrossUnsafe => {
                 self.state.super_head.cross_unsafe = Some(block);
                 self.log_state_update("CrossUnsafe", &block);
             }
-            ProcesssorStateUpdate::CrossSafe => {
+            ProcessorStateUpdate::CrossSafe => {
                 self.state.super_head.cross_safe = Some(block);
                 self.log_state_update("CrossSafe", &block);
             }
-            ProcesssorStateUpdate::Finalized => {
+            ProcessorStateUpdate::Finalized => {
                 self.state.super_head.finalized = Some(block);
                 self.log_state_update("Finalized", &block);
             }
-            ProcesssorStateUpdate::L1Source => {
+            ProcessorStateUpdate::L1Source => {
                 self.state.super_head.l1_source = Some(block);
                 self.log_state_update("L1Source", &block);
             }
-            ProcesssorStateUpdate::InvalidateBlock => {
+            ProcessorStateUpdate::InvalidateBlock => {
                 self.log_state_update("InvalidateBlock", &block);
             }
-            ProcesssorStateUpdate::BlockReplaced => {
+            ProcessorStateUpdate::BlockReplaced => {
                 self.log_state_update("BlockReplaced", &block);
             }
         }

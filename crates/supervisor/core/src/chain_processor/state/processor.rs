@@ -45,7 +45,7 @@ impl ProcessorState {
 
 /// Represents the different types of state updates that can be applied to the chain processor.
 #[derive(Debug)]
-pub enum ProcesssorStateUpdate {
+pub enum ProcessorStateUpdate {
     /// Local unsafe update.
     LocalUnsafe,
     /// Local safe update.

@@ -12,6 +12,6 @@ mod metrics;
 pub(crate) use metrics::Metrics;
 
 mod state;
-pub use state::{ProcessorState, ProcesssorStateUpdate};
+pub use state::{ProcessorState, ProcessorStateUpdate};
 
 pub mod handlers;

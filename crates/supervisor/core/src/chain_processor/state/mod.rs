@@ -1,2 +1,2 @@
 mod processor;
-pub use processor::{ProcessorState, ProcesssorStateUpdate};
+pub use processor::{ProcessorState, ProcessorStateUpdate};
