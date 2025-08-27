@@ -95,21 +95,20 @@ impl SupervisorAdminApiServer for AdminRpc {
         })?;
 
         // wait for response with a timeout
-        match timeout(Duration::from_secs(ADMIN_REQUEST_TIMEOUT_SECS), resp_rx).await {
-            Ok(Ok(Ok(()))) => Ok(()),
-            Ok(Ok(Err(err))) => {
-                warn!(target: "supervisor::admin_rpc", %url, %err, "Failed to process AdminRequest");
-                Err(ErrorObject::from(err))
-            }
-            Ok(Err(err)) => {
-                warn!(target: "supervisor::admin_rpc", %url, %err, "AdminRequest sender dropped");
-                Err(ErrorObject::from(AdminError::SenderDropped))
-            }
-            Err(_) => {
-                warn!(target: "supervisor::admin_rpc", %url, "AdminRequest timed out");
-                Err(ErrorObject::from(AdminError::Timeout))
-            }
-        }
+        timeout(Duration::from_secs(ADMIN_REQUEST_TIMEOUT_SECS), resp_rx)
+            .await
+            .map_or_else(
+                |_| {
+                    warn!(target: "supervisor::admin_rpc", %url, "AdminRequest timed out");
+                    Err(ErrorObject::from(AdminError::Timeout))
+                },
+                |res| res
+                    .unwrap_or(Err(AdminError::SenderDropped))
+                    .map_err(|err| {
+                        warn!(target: "supervisor::admin_rpc", %url, %err, "Failed to process AdminRequest");
+                        ErrorObject::from(err)
+                    }),
+            )
     }
 }
 
