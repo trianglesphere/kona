@@ -1,16 +1,19 @@
 use super::{ManagedNodeClient, ManagedNodeError};
-use alloy_eips::BlockNumHash;
+use alloy_eips::{BlockNumHash, BlockNumberOrTag};
+use alloy_network::Ethereum;
 use alloy_primitives::ChainId;
+use alloy_provider::{Provider, RootProvider};
 use kona_protocol::BlockInfo;
 use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, StorageError};
 use kona_supervisor_types::SuperHead;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[derive(Debug)]
 pub(super) struct Resetter<DB, C> {
     client: Arc<C>,
+    l1_provider: RootProvider<Ethereum>,
     db_provider: Arc<DB>,
     reset_guard: Mutex<()>,
 }
@@ -21,8 +24,12 @@ where
     C: ManagedNodeClient + Send + Sync + 'static,
 {
     /// Creates a new [`Resetter`] with the specified client.
-    pub(super) fn new(client: Arc<C>, db_provider: Arc<DB>) -> Self {
-        Self { client, db_provider, reset_guard: Mutex::new(()) }
+    pub(super) fn new(
+        client: Arc<C>,
+        l1_provider: RootProvider<Ethereum>,
+        db_provider: Arc<DB>,
+    ) -> Self {
+        Self { client, l1_provider, db_provider, reset_guard: Mutex::new(()) }
     }
 
     /// Resets the node using the latest super head.
@@ -44,6 +51,13 @@ where
                 return Err(ManagedNodeError::ResetFailed);
             }
         };
+
+        // check if the source of valid local_safe is canonical
+        let source = self.db_provider.derived_to_source(local_safe.id())?;
+        if !self.is_canonical(chain_id, source.id()).await? {
+            warn!(target: "supervisor::syncnode_resetter", %chain_id, %source, "Source block for the valid local safe is not canonical");
+            return Err(ManagedNodeError::ResetFailed);
+        }
 
         let SuperHead { cross_unsafe, cross_safe, finalized, .. } =
             self.db_provider.get_super_head().inspect_err(
@@ -155,6 +169,26 @@ where
                 })?;
         }
     }
+
+    async fn is_canonical(
+        &self,
+        chain_id: ChainId,
+        source: BlockNumHash,
+    ) -> Result<bool, ManagedNodeError> {
+        let canonical_block = self
+            .l1_provider
+            .get_block_by_number(BlockNumberOrTag::Number(source.number))
+            .await
+            .map_err(|err| {
+                warn!(target: "supervisor::syncnode_resetter", %chain_id, %err, "Failed to fetch source block from L1");
+                ManagedNodeError::GetBlockByNumberFailed(source.number)
+            })?;
+
+        canonical_block.map_or_else(
+            || Ok(false),
+            |block| if block.hash() == source.hash { Ok(true) } else { Ok(false) },
+        )
+    }
 }
 
 #[cfg(test)]
@@ -163,6 +197,8 @@ mod tests {
     use crate::syncnode::{AuthenticationError, ClientError};
     use alloy_eips::BlockNumHash;
     use alloy_primitives::{B256, ChainId};
+    use alloy_provider::mock::{Asserter, MockTransport};
+    use alloy_rpc_client::RpcClient;
     use async_trait::async_trait;
     use jsonrpsee::core::client::Subscription;
     use kona_interop::{DerivedRefPair, SafetyLevel};
@@ -244,7 +280,10 @@ mod tests {
 
         client.expect_reset().returning(|_, _, _, _, _| Ok(()));
 
-        let resetter = Resetter::new(Arc::new(client), Arc::new(db));
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+        let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_ok());
     }
@@ -257,7 +296,10 @@ mod tests {
         let mut client = MockClient::new();
         client.expect_chain_id().returning(move || Ok(1));
 
-        let resetter = Resetter::new(Arc::new(client), Arc::new(db));
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+        let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_err());
     }
@@ -279,7 +321,10 @@ mod tests {
             .expect_block_ref_by_number()
             .returning(|_| Err(ClientError::Authentication(AuthenticationError::InvalidHeader)));
 
-        let resetter = Resetter::new(Arc::new(client), Arc::new(db));
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+        let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_err());
     }
@@ -326,7 +371,10 @@ mod tests {
 
         client.expect_reset().times(1).returning(|_, _, _, _, _| Ok(()));
 
-        let resetter = Resetter::new(Arc::new(client), Arc::new(db));
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+        let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_ok());
     }
@@ -351,7 +399,10 @@ mod tests {
             Err(ClientError::Authentication(AuthenticationError::InvalidJwt))
         });
 
-        let resetter = Resetter::new(Arc::new(client), Arc::new(db));
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+        let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_err());
     }

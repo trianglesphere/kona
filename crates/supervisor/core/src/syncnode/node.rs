@@ -13,9 +13,7 @@ use alloy_rpc_types_eth::BlockNumHash;
 use async_trait::async_trait;
 use kona_interop::{BlockReplacement, DerivedRefPair};
 use kona_protocol::BlockInfo;
-use kona_supervisor_storage::{
-    DerivationStorageReader, HeadRefStorageReader, LogStorageReader, StorageError,
-};
+use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, LogStorageReader};
 use kona_supervisor_types::{BlockSeal, OutputV0, Receipts};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
@@ -30,8 +28,6 @@ pub struct ManagedNode<DB, C> {
     client: Arc<C>,
     /// Shared L1 provider for fetching receipts
     l1_provider: RootProvider<Ethereum>,
-    /// Shared database provider for accessing storage
-    db_provider: Arc<DB>,
     /// Resetter for handling node resets
     resetter: Arc<Resetter<DB, C>>,
     /// Channel for sending events to the chain processor
@@ -53,16 +49,9 @@ where
         l1_provider: RootProvider<Ethereum>,
         chain_event_sender: mpsc::Sender<ChainEvent>,
     ) -> Self {
-        let resetter = Arc::new(Resetter::new(client.clone(), db_provider.clone()));
+        let resetter = Arc::new(Resetter::new(client.clone(), l1_provider.clone(), db_provider));
 
-        Self {
-            client,
-            resetter,
-            l1_provider,
-            db_provider,
-            chain_event_sender,
-            chain_id: Mutex::new(None),
-        }
+        Self { client, resetter, l1_provider, chain_event_sender, chain_id: Mutex::new(None) }
     }
 
     /// Returns the [`ChainId`] of the [`ManagedNode`].
@@ -137,35 +126,6 @@ where
                 current_source = %derived_ref_pair.source,
                 "Parent hash mismatch. Possible reorg detected"
             );
-
-            // cross validate if reorg has been handled
-            match self.db_provider.get_source_block(derived_ref_pair.source.number) {
-                Ok(block) => {
-                    if block.hash != new_source.parent_hash {
-                        // this means the reorg has not been handled
-                        warn!(
-                            target: "supervisor::managed_node",
-                            %chain_id,
-                            %new_source,
-                            %block,
-                            "Reorg has not been handled. skip providing the new l1 block"
-                        );
-                        return Ok(());
-                    }
-                }
-                Err(StorageError::EntryNotFound(_)) => {
-                    debug!(
-                        target: "supervisor::managed_node",
-                        %chain_id,
-                        %new_source,
-                        "Source block not found for the new L1 block. Reorg has been handled"
-                    );
-                }
-                Err(err) => {
-                    error!(target: "supervisor::managed_node", %chain_id, %err, "Failed to get source block for the new L1 block");
-                    return Err(ManagedNodeError::StorageError(err));
-                }
-            }
         }
 
         self.client.provide_l1(new_source).await.inspect_err(|err| {
