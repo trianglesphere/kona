@@ -104,7 +104,6 @@ func testPreInteropCheckAccessList(t devtest.T, sys *presets.SimpleInterop) {
 
 // Acceptance Test: https://github.com/ethereum-optimism/optimism/blob/develop/op-acceptance-tests/tests/interop/upgrade/pre_test.go
 func TestPreNoInbox(gt *testing.T) {
-// 	gt.Skip("This test requires op_contract_deployer_params setup in the kurtosis network, which is not available in the devnet setup.")
 	t := devtest.ParallelT(gt)
 	sys := presets.NewSimpleInterop(t)
 	require := t.Require()
