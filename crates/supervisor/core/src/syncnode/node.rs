@@ -13,11 +13,13 @@ use alloy_rpc_types_eth::BlockNumHash;
 use async_trait::async_trait;
 use kona_interop::{BlockReplacement, DerivedRefPair};
 use kona_protocol::BlockInfo;
-use kona_supervisor_storage::{DerivationStorageReader, HeadRefStorageReader, LogStorageReader};
+use kona_supervisor_storage::{
+    DerivationStorageReader, HeadRefStorageReader, LogStorageReader, StorageError,
+};
 use kona_supervisor_types::{BlockSeal, OutputV0, Receipts};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
-use tracing::{error, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// [`ManagedNode`] handles the subscription to managed node events.
 ///
@@ -28,6 +30,8 @@ pub struct ManagedNode<DB, C> {
     client: Arc<C>,
     /// Shared L1 provider for fetching receipts
     l1_provider: RootProvider<Ethereum>,
+    /// Shared database provider for accessing storage
+    db_provider: Arc<DB>,
     /// Resetter for handling node resets
     resetter: Arc<Resetter<DB, C>>,
     /// Channel for sending events to the chain processor
@@ -49,9 +53,16 @@ where
         l1_provider: RootProvider<Ethereum>,
         chain_event_sender: mpsc::Sender<ChainEvent>,
     ) -> Self {
-        let resetter = Arc::new(Resetter::new(client.clone(), db_provider));
+        let resetter = Arc::new(Resetter::new(client.clone(), db_provider.clone()));
 
-        Self { client, resetter, l1_provider, chain_event_sender, chain_id: Mutex::new(None) }
+        Self {
+            client,
+            resetter,
+            l1_provider,
+            db_provider,
+            chain_event_sender,
+            chain_id: Mutex::new(None),
+        }
     }
 
     /// Returns the [`ChainId`] of the [`ManagedNode`].
@@ -116,16 +127,45 @@ where
             timestamp: block.header.timestamp,
         };
 
-        if block.header.parent_hash != derived_ref_pair.source.hash {
+        if new_source.parent_hash != derived_ref_pair.source.hash {
             // this could happen due to a reorg.
             // this case should be handled by the reorg manager
-            warn!(
+            debug!(
                 target: "supervisor::managed_node",
                 %chain_id,
                 %new_source,
                 current_source = %derived_ref_pair.source,
                 "Parent hash mismatch. Possible reorg detected"
             );
+
+            // cross validate if reorg has been handled
+            match self.db_provider.get_source_block(derived_ref_pair.source.number) {
+                Ok(block) => {
+                    if block.hash != new_source.parent_hash {
+                        // this means the reorg has not been handled
+                        warn!(
+                            target: "supervisor::managed_node",
+                            %chain_id,
+                            %new_source,
+                            %block,
+                            "Reorg has not been handled. skip providing the new l1 block"
+                        );
+                        return Ok(());
+                    }
+                }
+                Err(StorageError::EntryNotFound(_)) => {
+                    debug!(
+                        target: "supervisor::managed_node",
+                        %chain_id,
+                        %new_source,
+                        "Source block not found for the new L1 block. Reorg has been handled"
+                    );
+                }
+                Err(err) => {
+                    error!(target: "supervisor::managed_node", %chain_id, %err, "Failed to get source block for the new L1 block");
+                    return Err(ManagedNodeError::StorageError(err));
+                }
+            }
         }
 
         self.client.provide_l1(new_source).await.inspect_err(|err| {
@@ -142,7 +182,7 @@ where
 
     async fn handle_reset(&self, reset_id: &str) -> Result<(), ManagedNodeError> {
         let chain_id = self.chain_id().await?;
-        trace!(target: "supervisor::managed_node", %chain_id, reset_id, "Handling reset event");
+        info!(target: "supervisor::managed_node", %chain_id, reset_id, "Handling reset event");
 
         self.resetter.reset().await?;
         Ok(())
@@ -352,7 +392,8 @@ mod tests {
     use kona_interop::{BlockReplacement, DerivedRefPair, SafetyLevel};
     use kona_protocol::BlockInfo;
     use kona_supervisor_storage::{
-        DerivationStorageReader, HeadRefStorageReader, LogStorageReader, StorageError,
+        DerivationStorageReader, EntryNotFoundError, HeadRefStorageReader, LogStorageReader,
+        StorageError,
     };
     use kona_supervisor_types::{BlockSeal, Log, OutputV0, Receipts, SubscriptionEvent, SuperHead};
     use mockall::{mock, predicate::*};
@@ -617,7 +658,7 @@ mod tests {
         client.expect_provide_l1().times(1).returning(|_| Ok(())); // Should be called
 
         let client = Arc::new(client);
-        let db = Arc::new(MockDb::new());
+        let mut db = MockDb::new();
 
         let derived_ref_pair = DerivedRefPair {
             source: BlockInfo {
@@ -667,6 +708,18 @@ mod tests {
             "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
         }"#;
 
+        db.expect_get_source_block().returning(|_| {
+            Ok(BlockInfo {
+                hash: B256::from_hex(
+                    "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+                )
+                .unwrap(),
+                number: 10,
+                parent_hash: B256::from([9u8; 32]),
+                timestamp: 301,
+            })
+        });
+
         let asserter = Asserter::new();
         let transport = MockTransport::new(asserter.clone());
         let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
@@ -674,10 +727,233 @@ mod tests {
         asserter.push(MockResponse::Success(serde_json::from_str(next_block).unwrap()));
 
         let (tx, _rx) = mpsc::channel(10);
-        let node = ManagedNode::new(client.clone(), db, l1_provider, tx);
+        let node = ManagedNode::new(client.clone(), Arc::new(db), l1_provider, tx);
 
         let result = node.handle_exhaust_l1(&derived_ref_pair).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_handle_exhaust_l1_calls_provide_l1_on_parent_hash_mismatch_not_found() {
+        let mut client = MockClient::new();
+        client.expect_chain_id().times(1).returning(|| Ok(ChainId::from(42u64)));
+        client.expect_provide_l1().times(1).returning(|_| Ok(())); // Should be called
+
+        let client = Arc::new(client);
+        let mut db = MockDb::new();
+
+        let derived_ref_pair = DerivedRefPair {
+            source: BlockInfo {
+                hash: B256::from([1u8; 32]), // This will NOT match parent_hash below
+                number: 5,
+                parent_hash: B256::from([14u8; 32]),
+                timestamp: 300,
+            },
+            derived: BlockInfo {
+                hash: B256::from([11u8; 32]),
+                number: 40,
+                parent_hash: B256::from([12u8; 32]),
+                timestamp: 301,
+            },
+        };
+
+        // Block with mismatched parent_hash
+        let next_block = r#"{
+            "number": "10",
+            "hash": "0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+
+        db.expect_get_source_block().returning(|_| {
+            Err(StorageError::EntryNotFound(EntryNotFoundError::SourceBlockNotFound(10)))
+        });
+
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        asserter.push(MockResponse::Success(serde_json::from_str(next_block).unwrap()));
+
+        let (tx, _rx) = mpsc::channel(10);
+        let node = ManagedNode::new(client.clone(), Arc::new(db), l1_provider, tx);
+
+        let result = node.handle_exhaust_l1(&derived_ref_pair).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_handle_exhaust_l1_calls_provide_l1_on_parent_hash_mismatch_db_mismatch() {
+        let mut client = MockClient::new();
+        client.expect_chain_id().times(1).returning(|| Ok(ChainId::from(42u64)));
+
+        let client = Arc::new(client);
+        let mut db = MockDb::new();
+
+        let derived_ref_pair = DerivedRefPair {
+            source: BlockInfo {
+                hash: B256::from([1u8; 32]), // This will NOT match parent_hash below
+                number: 5,
+                parent_hash: B256::from([14u8; 32]),
+                timestamp: 300,
+            },
+            derived: BlockInfo {
+                hash: B256::from([11u8; 32]),
+                number: 40,
+                parent_hash: B256::from([12u8; 32]),
+                timestamp: 301,
+            },
+        };
+
+        // Block with mismatched parent_hash
+        let next_block = r#"{
+            "number": "10",
+            "hash": "0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+
+        db.expect_get_source_block().returning(|_| {
+            Ok(BlockInfo {
+                hash: B256::from([10u8; 32]),
+                number: 10,
+                parent_hash: B256::from([9u8; 32]),
+                timestamp: 301,
+            })
+        });
+
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        asserter.push(MockResponse::Success(serde_json::from_str(next_block).unwrap()));
+
+        let (tx, _rx) = mpsc::channel(10);
+        let node = ManagedNode::new(client.clone(), Arc::new(db), l1_provider, tx);
+
+        let result = node.handle_exhaust_l1(&derived_ref_pair).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_handle_exhaust_l1_calls_provide_l1_on_parent_hash_mismatch_error() {
+        let mut client = MockClient::new();
+        client.expect_chain_id().times(1).returning(|| Ok(ChainId::from(42u64)));
+
+        let client = Arc::new(client);
+        let mut db = MockDb::new();
+
+        let derived_ref_pair = DerivedRefPair {
+            source: BlockInfo {
+                hash: B256::from([1u8; 32]), // This will NOT match parent_hash below
+                number: 5,
+                parent_hash: B256::from([14u8; 32]),
+                timestamp: 300,
+            },
+            derived: BlockInfo {
+                hash: B256::from([11u8; 32]),
+                number: 40,
+                parent_hash: B256::from([12u8; 32]),
+                timestamp: 301,
+            },
+        };
+
+        // Block with mismatched parent_hash
+        let next_block = r#"{
+            "number": "10",
+            "hash": "0xd5f1812548be429cbdc6376b29611fc49e06f1359758c4ceaaa3b393e2239f9c",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+
+        db.expect_get_source_block().returning(|_| Err(StorageError::LockPoisoned));
+
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        asserter.push(MockResponse::Success(serde_json::from_str(next_block).unwrap()));
+
+        let (tx, _rx) = mpsc::channel(10);
+        let node = ManagedNode::new(client.clone(), Arc::new(db), l1_provider, tx);
+
+        let result = node.handle_exhaust_l1(&derived_ref_pair).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
