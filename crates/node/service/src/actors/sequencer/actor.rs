@@ -263,10 +263,7 @@ impl<AB: AttributesBuilder> SequencerActorState<AB> {
         let _attributes_build_start = Instant::now();
         let mut attributes =
             match self.builder.prepare_payload_attributes(unsafe_head, l1_origin.id()).await {
-                Ok(mut attrs) => {
-                    attrs.no_tx_pool = Some(false);
-                    attrs
-                }
+                Ok(attrs) => attrs,
                 Err(PipelineErrorKind::Temporary(_)) => {
                     return Ok(());
                     // Do nothing and allow a retry.
@@ -291,15 +288,25 @@ impl<AB: AttributesBuilder> SequencerActorState<AB> {
                 }
             };
 
+        // Set the no_tx_pool flag to false by default (since we're building with the sequencer).
+        attributes.no_tx_pool = Some(false);
+
         if in_recovery_mode {
+            warn!(target: "sequencer", "Sequencer is in recovery mode, producing empty block");
             attributes.no_tx_pool = Some(true);
         }
 
         // If the next L2 block is beyond the sequencer drift threshold, we must produce an empty
         // block.
-        attributes.no_tx_pool = (attributes.payload_attributes.timestamp >
-            l1_origin.timestamp + self.cfg.max_sequencer_drift(l1_origin.timestamp))
-        .then_some(true);
+        if attributes.payload_attributes.timestamp >
+            l1_origin.timestamp + self.cfg.max_sequencer_drift(l1_origin.timestamp)
+        {
+            warn!(
+                target: "sequencer",
+                "Sequencer drift detected, producing empty block"
+            );
+            attributes.no_tx_pool = Some(true);
+        }
 
         // Do not include transactions in the first Ecotone block.
         if self.cfg.is_first_ecotone_block(attributes.payload_attributes.timestamp) {
