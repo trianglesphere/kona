@@ -142,7 +142,7 @@ where
 
     async fn handle_reset(&self, reset_id: &str) -> Result<(), ManagedNodeError> {
         let chain_id = self.chain_id().await?;
-        info!(target: "supervisor::managed_node", %chain_id, reset_id, "Handling reset event");
+        trace!(target: "supervisor::managed_node", %chain_id, reset_id, "Handling reset event");
 
         self.resetter.reset().await?;
         Ok(())
