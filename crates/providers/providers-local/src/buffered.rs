@@ -5,7 +5,6 @@
 //! directly from this cached state. Chain updates are provided through the `add_block` and
 //! `handle_chain_event` methods.
 
-use crate::buffer::{CachedBlock, ChainBufferError, ChainStateBuffer, ChainStateEvent};
 use alloy_primitives::B256;
 use async_trait::async_trait;
 use kona_derive::{L2ChainProvider, PipelineError, PipelineErrorKind};
@@ -14,6 +13,8 @@ use kona_protocol::{BatchValidationProvider, L2BlockInfo, to_system_config};
 use op_alloy_consensus::OpBlock;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+use crate::{CachedBlock, ChainBufferError, ChainStateBuffer, ChainStateEvent};
 
 /// A buffered L2 provider that serves data from in-memory chain state.
 ///
