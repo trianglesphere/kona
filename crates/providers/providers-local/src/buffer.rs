@@ -58,23 +58,23 @@ pub struct CachedBlock {
 
 impl CachedBlock {
     /// Create a new cached block
-    pub fn new(block: OpBlock, l2_block_info: L2BlockInfo) -> Self {
+    pub const fn new(block: OpBlock, l2_block_info: L2BlockInfo) -> Self {
         Self { block, l2_block_info, canonical: true }
     }
 
     /// Mark this block as non-canonical
-    pub fn mark_non_canonical(mut self) -> Self {
+    pub const fn mark_non_canonical(mut self) -> Self {
         self.canonical = false;
         self
     }
 
     /// Get the block hash
-    pub fn hash(&self) -> B256 {
+    pub const fn hash(&self) -> B256 {
         self.l2_block_info.block_info.hash
     }
 
     /// Get the block number
-    pub fn number(&self) -> u64 {
+    pub const fn number(&self) -> u64 {
         self.l2_block_info.block_info.number
     }
 }
@@ -146,12 +146,24 @@ impl ChainStateBuffer {
 
         blocks_by_hash.put(hash, block);
         blocks_by_number.put(number, hash);
-        
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
-            kona_macros::set!(gauge, Metrics::CACHE_ENTRIES, "cache", "blocks_by_hash", blocks_by_hash.len() as f64);
-            kona_macros::set!(gauge, Metrics::CACHE_ENTRIES, "cache", "blocks_by_number", blocks_by_number.len() as f64);
+            kona_macros::set!(
+                gauge,
+                Metrics::CACHE_ENTRIES,
+                "cache",
+                "blocks_by_hash",
+                blocks_by_hash.len() as f64
+            );
+            kona_macros::set!(
+                gauge,
+                Metrics::CACHE_ENTRIES,
+                "cache",
+                "blocks_by_number",
+                blocks_by_number.len() as f64
+            );
         }
     }
 
@@ -176,7 +188,6 @@ impl ChainStateBuffer {
         new_head: B256,
         committed: Vec<B256>,
     ) -> Result<(), ChainBufferError> {
-
         // Update canonical head
         let mut canonical_head = self.canonical_head.write().await;
         *canonical_head = Some(new_head);
@@ -199,11 +210,10 @@ impl ChainStateBuffer {
         new_head: B256,
         depth: u64,
     ) -> Result<(), ChainBufferError> {
-
         if depth > self.max_reorg_depth {
             return Err(ChainBufferError::ReorgTooDeep { depth, max_depth: self.max_reorg_depth });
         }
-        
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
@@ -221,7 +231,7 @@ impl ChainStateBuffer {
             let mut blocks_by_number = self.blocks_by_number.write().await;
             blocks_by_hash.clear();
             blocks_by_number.clear();
-            
+
             #[cfg(feature = "metrics")]
             {
                 use crate::Metrics;
@@ -239,7 +249,6 @@ impl ChainStateBuffer {
         new_head: B256,
         reverted: Vec<B256>,
     ) -> Result<(), ChainBufferError> {
-
         // Update canonical head
         let mut canonical_head = self.canonical_head.write().await;
         *canonical_head = Some(new_head);
@@ -281,7 +290,7 @@ impl ChainStateBuffer {
         blocks_by_hash.clear();
         blocks_by_number.clear();
         *canonical_head = None;
-        
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
@@ -310,10 +319,18 @@ pub struct CacheStats {
 pub enum ChainBufferError {
     /// Reorg is too deep to handle
     #[error("Reorg depth {depth} exceeds maximum supported depth {max_depth}")]
-    ReorgTooDeep { depth: u64, max_depth: u64 },
+    ReorgTooDeep {
+        /// The depth of the reorg attempted
+        depth: u64,
+        /// The maximum supported reorg depth
+        max_depth: u64,
+    },
     /// Block not found in cache
     #[error("Block not found in cache: {hash}")]
-    BlockNotFound { hash: B256 },
+    BlockNotFound {
+        /// The hash of the block that was not found
+        hash: B256,
+    },
 }
 
 #[cfg(test)]
@@ -325,7 +342,7 @@ mod tests {
     use kona_protocol::BlockInfo;
     use op_alloy_consensus::OpTxEnvelope;
 
-    fn create_test_block(number: u64, hash: B256, parent_hash: B256) -> (OpBlock, L2BlockInfo) {
+    fn create_test_block(number: u64, _hash: B256, parent_hash: B256) -> (OpBlock, L2BlockInfo) {
         let header = Header {
             number,
             parent_hash,
@@ -337,7 +354,7 @@ mod tests {
             nonce: FixedBytes::ZERO,
             ..Default::default()
         };
-        
+
         let block = OpBlock {
             header: header.clone(),
             body: alloy_consensus::BlockBody {
@@ -346,7 +363,7 @@ mod tests {
                 withdrawals: None,
             },
         };
-        
+
         let l2_block_info = L2BlockInfo {
             block_info: BlockInfo {
                 hash: header.hash_slow(),
@@ -357,7 +374,7 @@ mod tests {
             l1_origin: BlockNumHash { number: 1, hash: B256::ZERO },
             seq_num: 0,
         };
-        
+
         (block, l2_block_info)
     }
 

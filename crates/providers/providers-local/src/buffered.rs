@@ -1,9 +1,9 @@
 //! Buffered L2 Provider implementation that serves data from in-memory chain state.
 //!
-//! This provider operates as a pure in-memory cache without any dependency on external RPC providers.
-//! It stores complete blocks with their L2 block information and serves all queries directly from
-//! this cached state. Chain updates are provided through the `add_block` and `handle_chain_event`
-//! methods.
+//! This provider operates as a pure in-memory cache without any dependency on external RPC
+//! providers. It stores complete blocks with their L2 block information and serves all queries
+//! directly from this cached state. Chain updates are provided through the `add_block` and
+//! `handle_chain_event` methods.
 
 use crate::buffer::{CachedBlock, ChainBufferError, ChainStateBuffer, ChainStateEvent};
 use alloy_primitives::B256;
@@ -47,12 +47,8 @@ impl BufferedL2Provider {
     /// * `rollup_config` - The rollup configuration containing genesis and chain parameters
     /// * `cache_size` - Maximum number of blocks to keep in the LRU cache
     /// * `max_reorg_depth` - Maximum reorg depth to handle before clearing the cache
-    pub fn new(
-        rollup_config: Arc<RollupConfig>,
-        cache_size: usize,
-        max_reorg_depth: u64,
-    ) -> Self {
-        let genesis = rollup_config.genesis.clone();
+    pub fn new(rollup_config: Arc<RollupConfig>, cache_size: usize, max_reorg_depth: u64) -> Self {
+        let genesis = rollup_config.genesis;
         Self {
             buffer: Arc::new(ChainStateBuffer::new(cache_size, max_reorg_depth)),
             current_head: RwLock::new(None),
@@ -123,13 +119,13 @@ impl BufferedL2Provider {
     ) -> Result<(), BufferedProviderError> {
         let cached_block = CachedBlock::new(block, l2_block_info);
         self.buffer.insert_block(cached_block).await;
-        
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
             kona_macros::inc!(gauge, Metrics::BLOCKS_ADDED);
         }
-        
+
         Ok(())
     }
 
@@ -138,7 +134,6 @@ impl BufferedL2Provider {
         let current_head = self.current_head.read().await;
         *current_head
     }
-
 
     /// Get cache statistics
     pub async fn cache_stats(&self) -> crate::buffer::CacheStats {
@@ -158,7 +153,7 @@ impl Clone for BufferedL2Provider {
             buffer: self.buffer.clone(),
             current_head: RwLock::new(None),
             rollup_config: self.rollup_config.clone(),
-            genesis: self.genesis.clone(),
+            genesis: self.genesis,
         }
     }
 }
@@ -178,11 +173,8 @@ impl L2ChainProvider for BufferedL2Provider {
         }
 
         // Get the block from cache
-        let cached_block = self
-            .buffer
-            .get_block_by_number(number)
-            .await;
-        
+        let cached_block = self.buffer.get_block_by_number(number).await;
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
@@ -192,7 +184,7 @@ impl L2ChainProvider for BufferedL2Provider {
                 kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_MISSES, "method" => "system_config");
             }
         }
-        
+
         let cached_block = cached_block.ok_or(BufferedProviderError::BlockNotFound(number))?;
 
         // Extract system config from the block
@@ -207,11 +199,8 @@ impl BatchValidationProvider for BufferedL2Provider {
 
     async fn block_by_number(&mut self, number: u64) -> Result<OpBlock, Self::Error> {
         // Get the block from cache
-        let cached_block = self
-            .buffer
-            .get_block_by_number(number)
-            .await;
-        
+        let cached_block = self.buffer.get_block_by_number(number).await;
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
@@ -221,10 +210,10 @@ impl BatchValidationProvider for BufferedL2Provider {
                 kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_MISSES, "method" => "block_by_number");
             }
         }
-        
+
         let cached_block = cached_block.ok_or(BufferedProviderError::BlockNotFound(number))?;
 
-        Ok(cached_block.block.clone())
+        Ok(cached_block.block)
     }
 
     async fn l2_block_info_by_number(&mut self, number: u64) -> Result<L2BlockInfo, Self::Error> {
@@ -238,11 +227,8 @@ impl BatchValidationProvider for BufferedL2Provider {
         }
 
         // Get the block from cache
-        let cached_block = self
-            .buffer
-            .get_block_by_number(number)
-            .await;
-        
+        let cached_block = self.buffer.get_block_by_number(number).await;
+
         #[cfg(feature = "metrics")]
         {
             use crate::Metrics;
@@ -252,10 +238,10 @@ impl BatchValidationProvider for BufferedL2Provider {
                 kona_macros::inc!(gauge, Metrics::BUFFERED_PROVIDER_CACHE_MISSES, "method" => "l2_block_info");
             }
         }
-        
+
         let cached_block = cached_block.ok_or(BufferedProviderError::BlockNotFound(number))?;
 
-        Ok(cached_block.l2_block_info.clone())
+        Ok(cached_block.l2_block_info)
     }
 }
 
@@ -283,35 +269,31 @@ impl From<BufferedProviderError> for PipelineErrorKind {
     fn from(e: BufferedProviderError) -> Self {
         match e {
             BufferedProviderError::Buffer(ChainBufferError::ReorgTooDeep { depth, max_depth }) => {
-                PipelineErrorKind::Critical(PipelineError::Provider(format!(
+                Self::Critical(PipelineError::Provider(format!(
                     "Reorg too deep: {depth} > {max_depth}"
                 )))
             }
             BufferedProviderError::Buffer(ChainBufferError::BlockNotFound { hash }) => {
-                PipelineErrorKind::Temporary(PipelineError::Provider(format!(
+                Self::Temporary(PipelineError::Provider(format!(
                     "Block not found in cache: {hash}"
                 )))
             }
-            BufferedProviderError::BlockNotFound(number) => {
-                PipelineErrorKind::Temporary(PipelineError::Provider(format!(
-                    "Block {number} not found in cache"
-                )))
-            }
+            BufferedProviderError::BlockNotFound(number) => Self::Temporary(
+                PipelineError::Provider(format!("Block {number} not found in cache")),
+            ),
             BufferedProviderError::L2BlockInfoConstruction(number) => {
-                PipelineErrorKind::Temporary(PipelineError::Provider(format!(
+                Self::Temporary(PipelineError::Provider(format!(
                     "Failed to construct L2BlockInfo for block {number}"
                 )))
             }
             BufferedProviderError::SystemConfigConversion(number) => {
-                PipelineErrorKind::Temporary(PipelineError::Provider(format!(
+                Self::Temporary(PipelineError::Provider(format!(
                     "Failed to convert block {number} to SystemConfig"
                 )))
             }
-            BufferedProviderError::SystemConfigMissing => {
-                PipelineErrorKind::Critical(PipelineError::Provider(
-                    "System config missing from genesis".to_string(),
-                ))
-            }
+            BufferedProviderError::SystemConfigMissing => Self::Critical(PipelineError::Provider(
+                "System config missing from genesis".to_string(),
+            )),
         }
     }
 }
@@ -355,10 +337,7 @@ mod tests {
             timestamp: 1234567890,
             ..Default::default()
         };
-        let block1 = OpBlock {
-            header: header1,
-            body: Default::default(),
-        };
+        let block1 = OpBlock { header: header1, body: Default::default() };
         let l2_info1 = L2BlockInfo {
             block_info: BlockInfo {
                 hash: hash1,
@@ -414,10 +393,7 @@ mod tests {
             timestamp: 1234567890,
             ..Default::default()
         };
-        let block = OpBlock {
-            header,
-            body: Default::default(),
-        };
+        let block = OpBlock { header, body: Default::default() };
         let l2_info = L2BlockInfo {
             block_info: BlockInfo {
                 hash,
@@ -430,7 +406,7 @@ mod tests {
         };
 
         // Add block to the provider
-        provider.add_block(block.clone(), l2_info.clone()).await.unwrap();
+        provider.add_block(block.clone(), l2_info).await.unwrap();
 
         // Retrieve block by number
         let retrieved_block = provider.block_by_number(1).await.unwrap();

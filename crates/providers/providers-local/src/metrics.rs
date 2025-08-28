@@ -54,59 +54,71 @@ impl Metrics {
             Self::BUFFERED_PROVIDER_CACHE_MISSES,
             "Number of cache misses in buffered provider"
         );
-        metrics::describe_gauge!(
-            Self::CHAIN_EVENTS_PROCESSED,
-            "Number of chain events processed"
-        );
+        metrics::describe_gauge!(Self::CHAIN_EVENTS_PROCESSED, "Number of chain events processed");
         metrics::describe_gauge!(
             Self::CHAIN_EVENT_ERRORS,
             "Number of chain event processing errors"
         );
-        metrics::describe_gauge!(
-            Self::BLOCKS_ADDED,
-            "Number of blocks added to cache"
-        );
-        metrics::describe_gauge!(
-            Self::CACHE_ENTRIES,
-            "Number of active entries in cache"
-        );
-        metrics::describe_gauge!(
-            Self::CACHE_CAPACITY,
-            "Total capacity of cache"
-        );
-        metrics::describe_gauge!(
-            Self::REORG_DEPTH,
-            "Maximum depth of reorganization observed"
-        );
-        metrics::describe_gauge!(
-            Self::CACHE_CLEARS,
-            "Number of times cache was cleared"
-        );
+        metrics::describe_gauge!(Self::BLOCKS_ADDED, "Number of blocks added to cache");
+        metrics::describe_gauge!(Self::CACHE_ENTRIES, "Number of active entries in cache");
+        metrics::describe_gauge!(Self::CACHE_CAPACITY, "Total capacity of cache");
+        metrics::describe_gauge!(Self::REORG_DEPTH, "Maximum depth of reorganization observed");
+        metrics::describe_gauge!(Self::CACHE_CLEARS, "Number of times cache was cleared");
     }
 
     /// Initializes metrics to `0` so they can be queried immediately.
     #[cfg(feature = "metrics")]
     pub fn zero() {
         // Cache hit/miss metrics
-        kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_HITS, "method", "block_by_number", 0);
+        kona_macros::set!(
+            gauge,
+            Self::BUFFERED_PROVIDER_CACHE_HITS,
+            "method",
+            "block_by_number",
+            0
+        );
         kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_HITS, "method", "block_by_hash", 0);
         kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_HITS, "method", "l2_block_info", 0);
         kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_HITS, "method", "system_config", 0);
-        
-        kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_MISSES, "method", "block_by_number", 0);
-        kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_MISSES, "method", "block_by_hash", 0);
-        kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_MISSES, "method", "l2_block_info", 0);
-        kona_macros::set!(gauge, Self::BUFFERED_PROVIDER_CACHE_MISSES, "method", "system_config", 0);
-        
+
+        kona_macros::set!(
+            gauge,
+            Self::BUFFERED_PROVIDER_CACHE_MISSES,
+            "method",
+            "block_by_number",
+            0
+        );
+        kona_macros::set!(
+            gauge,
+            Self::BUFFERED_PROVIDER_CACHE_MISSES,
+            "method",
+            "block_by_hash",
+            0
+        );
+        kona_macros::set!(
+            gauge,
+            Self::BUFFERED_PROVIDER_CACHE_MISSES,
+            "method",
+            "l2_block_info",
+            0
+        );
+        kona_macros::set!(
+            gauge,
+            Self::BUFFERED_PROVIDER_CACHE_MISSES,
+            "method",
+            "system_config",
+            0
+        );
+
         // Chain event metrics
         kona_macros::set!(gauge, Self::CHAIN_EVENTS_PROCESSED, "event", "committed", 0);
         kona_macros::set!(gauge, Self::CHAIN_EVENTS_PROCESSED, "event", "reorged", 0);
         kona_macros::set!(gauge, Self::CHAIN_EVENTS_PROCESSED, "event", "reverted", 0);
-        
+
         kona_macros::set!(gauge, Self::CHAIN_EVENT_ERRORS, "event", "committed", 0);
         kona_macros::set!(gauge, Self::CHAIN_EVENT_ERRORS, "event", "reorged", 0);
         kona_macros::set!(gauge, Self::CHAIN_EVENT_ERRORS, "event", "reverted", 0);
-        
+
         // General metrics
         kona_macros::set!(gauge, Self::BLOCKS_ADDED, 0);
         kona_macros::set!(gauge, Self::CACHE_ENTRIES, "cache", "blocks_by_hash", 0);
