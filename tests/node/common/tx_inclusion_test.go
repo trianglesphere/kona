@@ -1,4 +1,4 @@
-package node_transfers
+package node
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestL2TransactionInclusion(gt *testing.T) {
-	t := devtest.ParallelT(gt)
+	t := devtest.SerialT(gt)
 	out := node_utils.NewMixedOpKona(t)
 
 	originNode := out.L2ELSequencerNodes()[0]
