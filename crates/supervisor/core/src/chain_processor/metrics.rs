@@ -62,6 +62,11 @@ impl Metrics {
     pub(crate) const BLOCK_REPLACEMENT_LATENCY_SECONDS: &'static str =
         "supervisor_block_replacement_latency_seconds";
 
+    // --- Safety Head Ref Metric Names ---
+    /// Identifier for safety head ref.
+    /// Labels: `chain_id`, `type`
+    pub(crate) const SAFETY_HEAD_REF_LABELS: &'static str = "supervisor_safety_head_ref_labels";
+
     pub(crate) fn init(chain_id: ChainId) {
         Self::describe();
         Self::zero(chain_id);
@@ -121,6 +126,11 @@ impl Metrics {
             metrics::Unit::Seconds,
             "Latency for replacing blocks in the supervisor",
         );
+
+        metrics::describe_gauge!(
+            Self::SAFETY_HEAD_REF_LABELS,
+            "Supervisor safety head ref",
+        );
     }
 
     fn zero_block_processing(chain_id: ChainId, block_type: &'static str) {
@@ -144,6 +154,15 @@ impl Metrics {
             "chain_id" => chain_id.to_string()
         )
         .record(0.0);
+    }
+
+    fn zero_safety_head_ref(chain_id: ChainId, head_type: &'static str) {
+        metrics::gauge!(
+            Self::SAFETY_HEAD_REF_LABELS,
+            "type" => head_type,
+            "chain_id" => chain_id.to_string(),
+        )
+        .set(0.0);
     }
 
     fn zero_block_invalidation(chain_id: ChainId) {
@@ -195,6 +214,12 @@ impl Metrics {
 
         Self::zero_block_invalidation(chain_id);
         Self::zero_block_replacement(chain_id);
+
+        Self::zero_safety_head_ref(chain_id, Self::BLOCK_TYPE_LOCAL_UNSAFE);
+        Self::zero_safety_head_ref(chain_id, Self::BLOCK_TYPE_CROSS_UNSAFE);
+        Self::zero_safety_head_ref(chain_id, Self::BLOCK_TYPE_LOCAL_SAFE);
+        Self::zero_safety_head_ref(chain_id, Self::BLOCK_TYPE_CROSS_SAFE);
+        Self::zero_safety_head_ref(chain_id, Self::BLOCK_TYPE_FINALIZED);
     }
 
     /// Records metrics for a block processing operation.
@@ -212,6 +237,13 @@ impl Metrics {
                     "chain_id" => chain_id.to_string()
                 )
                 .increment(1);
+
+                metrics::gauge!(
+                    Self::SAFETY_HEAD_REF_LABELS,
+                    "type" => block_type,
+                    "chain_id" => chain_id.to_string(),
+                )
+                .set(block.number as f64);
 
                 // Calculate latency
                 match SystemTime::now().duration_since(std::time::UNIX_EPOCH) {

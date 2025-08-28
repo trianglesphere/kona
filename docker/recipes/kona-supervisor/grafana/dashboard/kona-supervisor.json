@@ -120,6 +120,10 @@
       "pluginVersion": "11.5.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
@@ -130,11 +134,7 @@
           "legendFormat": "{{version}}",
           "range": false,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         }
       ],
       "title": "Version",
@@ -195,6 +195,10 @@
       "pluginVersion": "11.5.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
@@ -205,11 +209,7 @@
           "legendFormat": "{{build_timestamp}}",
           "range": false,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         }
       ],
       "title": "Build Timestamp",
@@ -269,6 +269,10 @@
       "pluginVersion": "11.5.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "exemplar": false,
@@ -279,11 +283,7 @@
           "legendFormat": "{{cargo_features}}",
           "range": false,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         }
       ],
       "title": "Cargo Features",
@@ -344,6 +344,10 @@
       "pluginVersion": "11.5.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "expr": "kona_supervisor_info{namespace=~\"kona-supervisor-supervisor-superchain\"}",
@@ -352,11 +356,7 @@
           "legendFormat": "{{git_sha}}",
           "range": true,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         }
       ],
       "title": "Git SHA",
@@ -416,6 +416,10 @@
       "pluginVersion": "11.5.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "expr": "kona_supervisor_info{namespace=~\"kona-supervisor-supervisor-superchain\"}",
@@ -424,11 +428,7 @@
           "legendFormat": "{{target_triple}}",
           "range": true,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         }
       ],
       "title": "Target Triple",
@@ -489,6 +489,10 @@
       "pluginVersion": "11.5.0",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
           "disableTextWrap": false,
           "editorMode": "builder",
           "expr": "kona_supervisor_info{namespace=~\"kona-supervisor-supervisor-superchain\"}",
@@ -497,11 +501,7 @@
           "legendFormat": "{{build_profile}}",
           "range": true,
           "refId": "A",
-          "useBackend": false,
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          }
+          "useBackend": false
         }
       ],
       "title": "Build Profile",
@@ -859,7 +859,7 @@
       "type": "stat"
     },
     {
-      "collapsed": true,
+      "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -867,407 +867,554 @@
         "y": 11
       },
       "id": 35,
-      "panels": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 5
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 4,
-            "w": 12,
-            "x": 0,
-            "y": 8
-          },
-          "id": 36,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "percentChangeColorMode": "standard",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showPercentChange": false,
-            "textMode": "auto",
-            "wideLayout": true
-          },
-          "pluginVersion": "11.5.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "kona_supervisor_reorg_error{namespace=\"kona-supervisor-supervisor-superchain\"}",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "instant": false,
-              "legendFormat": "Failed ({{chain_id}})",
-              "range": true,
-              "refId": "Error",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "kona_supervisor_reorg_success{namespace=\"kona-supervisor-supervisor-superchain\", method!=\"process_chain_reorg\"}",
-              "fullMetaSearch": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Successful ({{chain_id}})",
-              "range": true,
-              "refId": "Success",
-              "useBackend": false
-            }
-          ],
-          "title": "Reorg ",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 8
-          },
-          "id": 37,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "percentChangeColorMode": "standard",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showPercentChange": false,
-            "textMode": "auto",
-            "wideLayout": true
-          },
-          "pluginVersion": "11.5.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "supervisor_block_processing_success_total{type=\"finalized\"}",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Finalized ({{chain_id}})",
-              "range": true,
-              "refId": "Finalized",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "supervisor_block_processing_success_total{type=\"cross_safe\"}",
-              "fullMetaSearch": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Cross-safe ({{chain_id}})",
-              "range": true,
-              "refId": "Cross-safe",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "supervisor_block_processing_success_total{type=\"cross_unsafe\"}",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Cross-unsafe ({{chain_id}})",
-              "range": true,
-              "refId": "Cross-unsafe",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "supervisor_block_processing_success_total{type=\"local_safe\"}",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Local-safe ({{chain_id}})",
-              "range": true,
-              "refId": "Local-safe",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "supervisor_block_processing_success_total{type=\"local_unsafe\"}",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Local-unsafe ({{chain_id}})",
-              "range": true,
-              "refId": "Local-unsafe",
-              "useBackend": false
-            }
-          ],
-          "title": "Total Blocks Processed",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "continuous-RdYlGr"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 3,
-            "w": 6,
-            "x": 0,
-            "y": 236
-          },
-          "id": 38,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "percentChangeColorMode": "standard",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showPercentChange": false,
-            "textMode": "auto",
-            "wideLayout": true
-          },
-          "pluginVersion": "11.5.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "sum by(namespace) (supervisor_rpc_requests_error_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Failed Requests",
-              "range": true,
-              "refId": "Error",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "sum by(namespace) (supervisor_rpc_requests_success_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
-              "fullMetaSearch": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Successful Requests",
-              "range": true,
-              "refId": "Success",
-              "useBackend": false
-            }
-          ],
-          "title": "Supervisor RPC",
-          "type": "stat"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "continuous-RdYlGr"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              }
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 3,
-            "w": 6,
-            "x": 6,
-            "y": 236
-          },
-          "id": 39,
-          "options": {
-            "colorMode": "value",
-            "graphMode": "none",
-            "justifyMode": "auto",
-            "orientation": "auto",
-            "percentChangeColorMode": "standard",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showPercentChange": false,
-            "textMode": "auto",
-            "wideLayout": true
-          },
-          "pluginVersion": "11.5.0",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "sum by(namespace) (managed_node_rpc_requests_error_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Failed Requests",
-              "range": true,
-              "refId": "Error",
-              "useBackend": false
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "disableTextWrap": false,
-              "editorMode": "builder",
-              "expr": "sum by(namespace) (managed_node_rpc_requests_success_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
-              "fullMetaSearch": false,
-              "includeNullMetadata": true,
-              "legendFormat": "Successful Requests",
-              "range": true,
-              "refId": "Success",
-              "useBackend": false
-            }
-          ],
-          "title": "Managed Node RPC",
-          "type": "stat"
-        }
-      ],
+      "panels": [],
       "title": "Supervisor Overview",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 36,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "kona_supervisor_reorg_error{namespace=\"kona-supervisor-supervisor-superchain\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "instant": false,
+          "legendFormat": "Failed ({{chain_id}})",
+          "range": true,
+          "refId": "Error",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "kona_supervisor_reorg_success{namespace=\"kona-supervisor-supervisor-superchain\", method!=\"process_chain_reorg\"}",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Successful ({{chain_id}})",
+          "range": true,
+          "refId": "Success",
+          "useBackend": false
+        }
+      ],
+      "title": "Reorg ",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 37,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_block_processing_success_total{type=\"finalized\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Finalized ({{chain_id}})",
+          "range": true,
+          "refId": "Finalized",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_block_processing_success_total{type=\"cross_safe\"}",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Cross-safe ({{chain_id}})",
+          "range": true,
+          "refId": "Cross-safe",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_block_processing_success_total{type=\"cross_unsafe\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Cross-unsafe ({{chain_id}})",
+          "range": true,
+          "refId": "Cross-unsafe",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_block_processing_success_total{type=\"local_safe\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Local-safe ({{chain_id}})",
+          "range": true,
+          "refId": "Local-safe",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_block_processing_success_total{type=\"local_unsafe\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Local-unsafe ({{chain_id}})",
+          "range": true,
+          "refId": "Local-unsafe",
+          "useBackend": false
+        }
+      ],
+      "title": "Total Blocks Processed",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-RdYlGr"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 0,
+        "y": 16
+      },
+      "id": 38,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "sum by(namespace) (supervisor_rpc_requests_error_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Failed Requests",
+          "range": true,
+          "refId": "Error",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "sum by(namespace) (supervisor_rpc_requests_success_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Successful Requests",
+          "range": true,
+          "refId": "Success",
+          "useBackend": false
+        }
+      ],
+      "title": "Supervisor RPC",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-RdYlGr"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 3,
+        "w": 6,
+        "x": 6,
+        "y": 16
+      },
+      "id": 39,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "sum by(namespace) (managed_node_rpc_requests_error_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Failed Requests",
+          "range": true,
+          "refId": "Error",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "sum by(namespace) (managed_node_rpc_requests_success_total{namespace=\"kona-supervisor-supervisor-superchain\"})",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "Successful Requests",
+          "range": true,
+          "refId": "Success",
+          "useBackend": false
+        }
+      ],
+      "title": "Managed Node RPC",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Shows the latest safety head ref block number for each chain",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "id": 54,
+      "options": {
+        "displayMode": "lcd",
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "maxVizHeight": 300,
+        "minVizHeight": 16,
+        "minVizWidth": 8,
+        "namePlacement": "auto",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "text"
+      },
+      "pluginVersion": "11.5.0",
+      "targets": [
+        {
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_safety_head_ref_labels{type=~\"local_unsafe\", chain_id=~\"$chain_id\"}",
+          "fullMetaSearch": false,
+          "includeNullMetadata": true,
+          "legendFormat": "{{type}}: {{chain_id}}",
+          "range": true,
+          "refId": "Local Unsafe",
+          "useBackend": false,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          }
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_safety_head_ref_labels{type=~\"cross_unsafe\", chain_id=~\"$chain_id\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "{{type}}: {{chain_id}}",
+          "range": true,
+          "refId": "Cross Unsafe",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_safety_head_ref_labels{type=~\"local_safe\", chain_id=~\"$chain_id\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "{{type}}: {{chain_id}}",
+          "range": true,
+          "refId": "Local Safe",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_safety_head_ref_labels{type=~\"cross_safe\", chain_id=~\"$chain_id\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "{{type}}: {{chain_id}}",
+          "range": true,
+          "refId": "Cross Safe",
+          "useBackend": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "disableTextWrap": false,
+          "editorMode": "builder",
+          "expr": "supervisor_safety_head_ref_labels{type=~\"finalized\", chain_id=~\"$chain_id\"}",
+          "fullMetaSearch": false,
+          "hide": false,
+          "includeNullMetadata": true,
+          "legendFormat": "{{type}}: {{chain_id}}",
+          "range": true,
+          "refId": "Finalized",
+          "useBackend": false
+        }
+      ],
+      "title": "Safety Head Refs: $chain_id",
+      "type": "bargauge"
     },
     {
       "collapsed": true,
@@ -1275,7 +1422,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 27
       },
       "id": 29,
       "panels": [
@@ -1545,7 +1692,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 121
+            "y": 352
           },
           "id": 30,
           "options": {
@@ -1646,7 +1793,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 121
+            "y": 352
           },
           "id": 31,
           "options": {
@@ -1750,7 +1897,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 129
+            "y": 360
           },
           "id": 32,
           "options": {
@@ -1797,7 +1944,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 28
       },
       "id": 1,
       "panels": [
@@ -2057,7 +2204,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 122
+            "y": 353
           },
           "id": 4,
           "options": {
@@ -2154,7 +2301,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 122
+            "y": 353
           },
           "id": 5,
           "options": {
@@ -2249,7 +2396,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 130
+            "y": 361
           },
           "id": 6,
           "options": {
@@ -2345,7 +2492,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 130
+            "y": 361
           },
           "id": 7,
           "options": {
@@ -2441,7 +2588,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 138
+            "y": 369
           },
           "id": 8,
           "options": {
@@ -2537,7 +2684,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 138
+            "y": 369
           },
           "id": 9,
           "options": {
@@ -2633,7 +2780,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 146
+            "y": 377
           },
           "id": 10,
           "options": {
@@ -2729,7 +2876,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 146
+            "y": 377
           },
           "id": 11,
           "options": {
@@ -2826,7 +2973,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 154
+            "y": 385
           },
           "id": 44,
           "options": {
@@ -2927,7 +3074,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 154
+            "y": 385
           },
           "id": 46,
           "options": {
@@ -3028,7 +3175,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 162
+            "y": 393
           },
           "id": 45,
           "options": {
@@ -3129,7 +3276,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 162
+            "y": 393
           },
           "id": 47,
           "options": {
@@ -3176,7 +3323,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 29
       },
       "id": 12,
       "panels": [
@@ -3228,8 +3375,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3245,7 +3391,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 15
+            "y": 246
           },
           "id": 13,
           "options": {
@@ -3324,8 +3470,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3341,7 +3486,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 15
+            "y": 246
           },
           "id": 14,
           "options": {
@@ -3420,8 +3565,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3437,7 +3581,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 23
+            "y": 254
           },
           "id": 15,
           "options": {
@@ -3516,8 +3660,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3533,7 +3676,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 23
+            "y": 254
           },
           "id": 16,
           "options": {
@@ -3612,8 +3755,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3629,7 +3771,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 31
+            "y": 262
           },
           "id": 17,
           "options": {
@@ -3708,8 +3850,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3725,7 +3866,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 31
+            "y": 262
           },
           "id": 18,
           "options": {
@@ -3784,7 +3925,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 39
+            "y": 270
           },
           "id": 19,
           "options": {
@@ -3854,7 +3995,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 47
+            "y": 278
           },
           "id": 20,
           "options": {
@@ -3906,7 +4047,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 30
       },
       "id": 21,
       "panels": [
@@ -3958,8 +4099,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3975,7 +4115,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 247
           },
           "id": 22,
           "options": {
@@ -4054,8 +4194,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4071,7 +4210,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 247
           },
           "id": 23,
           "options": {
@@ -4150,8 +4289,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4167,7 +4305,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 24
+            "y": 255
           },
           "id": 24,
           "options": {
@@ -4208,7 +4346,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 31
       },
       "id": 25,
       "panels": [
@@ -4260,8 +4398,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4277,7 +4414,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 17
+            "y": 248
           },
           "id": 26,
           "options": {
@@ -4356,8 +4493,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4373,7 +4509,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 17
+            "y": 248
           },
           "id": 27,
           "options": {
@@ -4452,8 +4588,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4469,7 +4604,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 25
+            "y": 256
           },
           "id": 28,
           "options": {
@@ -4516,12 +4651,17 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
+        "definition": "label_values(chain_id)",
         "includeAll": true,
         "label": "Chain ID",
         "multi": true,
         "name": "chain_id",
         "options": [],
-        "query": "label_values(supervisor_block_processing_success_total, chain_id)",
+        "query": {
+          "qryType": 1,
+          "query": "label_values(chain_id)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
         "refresh": 2,
         "type": "query"
       }
