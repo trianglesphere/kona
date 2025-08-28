@@ -39,4 +39,4 @@ jobs:
           cache-dependency-path: "**/go.sum"
 
       - name: test ${{ matrix.test-pkg }}
-        run: just test-e2e-sysgo "/supervisor/${{ matrix.test-pkg }}"
+        run: just test-e2e-sysgo supervisor "/supervisor/${{ matrix.test-pkg }}"
