@@ -197,7 +197,7 @@ mod tests {
     use crate::syncnode::{AuthenticationError, ClientError};
     use alloy_eips::BlockNumHash;
     use alloy_primitives::{B256, ChainId};
-    use alloy_provider::mock::{Asserter, MockTransport};
+    use alloy_provider::mock::{Asserter, MockResponse, MockTransport};
     use alloy_rpc_client::RpcClient;
     use async_trait::async_trait;
     use jsonrpsee::core::client::Subscription;
@@ -278,14 +278,115 @@ mod tests {
         client.expect_chain_id().returning(move || Ok(1));
         client.expect_block_ref_by_number().returning(move |_| Ok(super_head.local_safe.unwrap()));
 
-        client.expect_reset().returning(|_, _, _, _, _| Ok(()));
+        db.expect_derived_to_source()
+            .with(predicate::eq(super_head.local_safe.unwrap().id()))
+            .returning(move |_| Ok(super_head.l1_source.unwrap()));
 
         let asserter = Asserter::new();
         let transport = MockTransport::new(asserter.clone());
         let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        let canonical_block = r#"{
+            "number": "100",
+            "hash": "0x3636363636363636363636363636363636363636363636363636363636363636",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+        asserter.push(MockResponse::Success(serde_json::from_str(canonical_block).unwrap()));
+
+        client.expect_reset().returning(|_, _, _, _, _| Ok(()));
+
         let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_reset_canonical_hash_mismatch() {
+        let super_head = make_super_head();
+
+        let mut db = MockDb::new();
+        db.expect_latest_derivation_state().returning(move || {
+            Ok(DerivedRefPair {
+                derived: super_head.local_safe.unwrap(),
+                source: super_head.l1_source.unwrap(),
+            })
+        });
+        db.expect_get_super_head().returning(move || Ok(super_head));
+
+        let mut client = MockClient::new();
+        client.expect_chain_id().returning(move || Ok(1));
+        client.expect_block_ref_by_number().returning(move |_| Ok(super_head.local_safe.unwrap()));
+
+        db.expect_derived_to_source()
+            .with(predicate::eq(super_head.local_safe.unwrap().id()))
+            .returning(move |_| Ok(super_head.l1_source.unwrap()));
+
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        let canonical_block = r#"{
+            "number": "100",
+            "hash": "0x3737373737373737373737373737373737373737373737373737373737367637",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+        asserter.push(MockResponse::Success(serde_json::from_str(canonical_block).unwrap()));
+
+        let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
+
+        assert!(resetter.reset().await.is_err());
     }
 
     #[tokio::test]
@@ -367,13 +468,51 @@ mod tests {
             .with(predicate::eq(last_valid_derived_block.number))
             .returning(move |_| Ok(last_valid_derived_block));
 
-        db.expect_get_super_head().returning(move || Ok(super_head));
-
-        client.expect_reset().times(1).returning(|_, _, _, _, _| Ok(()));
+        db.expect_derived_to_source()
+            .with(predicate::eq(last_valid_derived_block.id()))
+            .returning(move |_| Ok(prev_source_block));
 
         let asserter = Asserter::new();
         let transport = MockTransport::new(asserter.clone());
         let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        let canonical_block = r#"{
+            "number": "100",
+            "hash": "0x0808080808080808080808080808080808080808080808080808080808080808",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+        asserter.push(MockResponse::Success(serde_json::from_str(canonical_block).unwrap()));
+
+        db.expect_get_super_head().returning(move || Ok(super_head));
+
+        client.expect_reset().times(1).returning(|_, _, _, _, _| Ok(()));
+
         let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_ok());
@@ -390,6 +529,48 @@ mod tests {
                 source: super_head.l1_source.unwrap(),
             })
         });
+
+        db.expect_derived_to_source()
+            .with(predicate::eq(super_head.local_safe.unwrap().id()))
+            .returning(move |_| Ok(super_head.l1_source.unwrap()));
+
+        let asserter = Asserter::new();
+        let transport = MockTransport::new(asserter.clone());
+        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
+
+        let canonical_block = r#"{
+            "number": "100",
+            "hash": "0x3636363636363636363636363636363636363636363636363636363636363636",
+            "mixHash": "0x24900fb3da77674a861c428429dce0762707ecb6052325bbd9b3c64e74b5af9d",
+            "parentHash": "0x1f68ac259155e2f38211ddad0f0a15394d55417b185a93923e2abe71bb7a4d6d",
+            "nonce": "0x378da40ff335b070",
+            "sha3Uncles": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "logsBloom": "0x00000000000000100000004080000000000500000000000000020000100000000800001000000004000001000000000000000800040010000020100000000400000010000000000000000040000000000000040000000000000000000000000000000400002400000000000000000000000000000004000004000000000000840000000800000080010004000000001000000800000000000000000000000000000000000800000000000040000000020000000000000000000800000400000000000000000000000600000400000000002000000000000000000000004000000000000000100000000000000000000000000000000000040000900010000000",
+            "transactionsRoot":"0x4d0c8e91e16bdff538c03211c5c73632ed054d00a7e210c0eb25146c20048126",
+            "stateRoot": "0x91309efa7e42c1f137f31fe9edbe88ae087e6620d0d59031324da3e2f4f93233",
+            "receiptsRoot": "0x68461ab700003503a305083630a8fb8d14927238f0bc8b6b3d246c0c64f21f4a",
+            "miner":"0xb42b6c4a95406c78ff892d270ad20b22642e102d",
+            "difficulty": "0x66e619a",
+            "totalDifficulty": "0x1e875d746ae",
+            "extraData": "0xd583010502846765746885676f312e37856c696e7578",
+            "size": "0x334",
+            "gasLimit": "0x47e7c4",
+            "gasUsed": "0x37993",
+            "timestamp": "0x5835c54d",
+            "uncles": [],
+            "transactions": [
+                "0xa0807e117a8dd124ab949f460f08c36c72b710188f01609595223b325e58e0fc",
+                "0xeae6d797af50cb62a596ec3939114d63967c374fa57de9bc0f4e2b576ed6639d"
+            ],
+            "baseFeePerGas": "0x7",
+            "withdrawalsRoot": "0x7a4ecf19774d15cf9c15adf0dd8e8a250c128b26c9e2ab2a08d6c9c8ffbd104f",
+            "withdrawals": [],
+            "blobGasUsed": "0x0",
+            "excessBlobGas": "0x0",
+            "parentBeaconBlockRoot": "0x95c4dbd5b19f6fe3cbc3183be85ff4e85ebe75c5b4fc911f1c91e5b7a554a685"
+        }"#;
+        asserter.push(MockResponse::Success(serde_json::from_str(canonical_block).unwrap()));
+
         db.expect_get_super_head().returning(move || Ok(super_head));
 
         let mut client = MockClient::new();
@@ -399,9 +580,6 @@ mod tests {
             Err(ClientError::Authentication(AuthenticationError::InvalidJwt))
         });
 
-        let asserter = Asserter::new();
-        let transport = MockTransport::new(asserter.clone());
-        let l1_provider = RootProvider::<Ethereum>::new(RpcClient::new(transport, false));
         let resetter = Resetter::new(Arc::new(client), l1_provider, Arc::new(db));
 
         assert!(resetter.reset().await.is_err());
