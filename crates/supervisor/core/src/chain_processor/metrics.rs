@@ -46,6 +46,8 @@ impl Metrics {
     pub(crate) const BLOCK_INVALIDATION_LATENCY_SECONDS: &'static str =
         "supervisor_block_invalidation_latency_seconds";
 
+    pub(crate) const BLOCK_INVALIDATION_METHOD_INVALIDATE_BLOCK: &'static str = "invalidate_block";
+
     // --- Block Replacement Metric Names ---
     /// Identifier for block replacement success.
     /// Labels: `chain_id`
@@ -61,6 +63,8 @@ impl Metrics {
     /// Labels: `chain_id`
     pub(crate) const BLOCK_REPLACEMENT_LATENCY_SECONDS: &'static str =
         "supervisor_block_replacement_latency_seconds";
+
+    pub(crate) const BLOCK_REPLACEMENT_METHOD_REPLACE_BLOCK: &'static str = "replace_block";
 
     // --- Safety Head Ref Metric Names ---
     /// Identifier for safety head ref.
@@ -127,10 +131,7 @@ impl Metrics {
             "Latency for replacing blocks in the supervisor",
         );
 
-        metrics::describe_gauge!(
-            Self::SAFETY_HEAD_REF_LABELS,
-            "Supervisor safety head ref",
-        );
+        metrics::describe_gauge!(Self::SAFETY_HEAD_REF_LABELS, "Supervisor safety head ref",);
     }
 
     fn zero_block_processing(chain_id: ChainId, block_type: &'static str) {
@@ -168,18 +169,21 @@ impl Metrics {
     fn zero_block_invalidation(chain_id: ChainId) {
         metrics::counter!(
             Self::BLOCK_INVALIDATION_SUCCESS_TOTAL,
+            "method" => Self::BLOCK_INVALIDATION_METHOD_INVALIDATE_BLOCK,
             "chain_id" => chain_id.to_string()
         )
         .increment(0);
 
         metrics::counter!(
             Self::BLOCK_INVALIDATION_ERROR_TOTAL,
+            "method" => Self::BLOCK_INVALIDATION_METHOD_INVALIDATE_BLOCK,
             "chain_id" => chain_id.to_string()
         )
         .increment(0);
 
         metrics::histogram!(
             Self::BLOCK_INVALIDATION_LATENCY_SECONDS,
+            "method" => Self::BLOCK_INVALIDATION_METHOD_INVALIDATE_BLOCK,
             "chain_id" => chain_id.to_string()
         )
         .record(0.0);
@@ -188,18 +192,21 @@ impl Metrics {
     fn zero_block_replacement(chain_id: ChainId) {
         metrics::counter!(
             Self::BLOCK_REPLACEMENT_SUCCESS_TOTAL,
+            "method" => Self::BLOCK_REPLACEMENT_METHOD_REPLACE_BLOCK,
             "chain_id" => chain_id.to_string()
         )
         .increment(0);
 
         metrics::counter!(
             Self::BLOCK_REPLACEMENT_ERROR_TOTAL,
+            "method" => Self::BLOCK_REPLACEMENT_METHOD_REPLACE_BLOCK,
             "chain_id" => chain_id.to_string()
         )
         .increment(0);
 
         metrics::histogram!(
             Self::BLOCK_REPLACEMENT_LATENCY_SECONDS,
+            "method" => Self::BLOCK_REPLACEMENT_METHOD_REPLACE_BLOCK,
             "chain_id" => chain_id.to_string()
         )
         .record(0.0);
