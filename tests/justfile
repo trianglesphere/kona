@@ -127,5 +127,5 @@ update-node-devnet DEVNET OP_PACKAGE_PATH="": (build-devnet "node")
 
 unzip-contract-artifacts:
     #!/bin/bash
-    mkdir -p {{SOURCE}}/packages/contracts-bedrock/forge-artifacts
-    tar -xzf {{SOURCE}}/artifacts/compressed/artifacts.tgz -C {{SOURCE}}/packages/contracts-bedrock/forge-artifacts
+    mkdir -p {{SOURCE}}/artifacts/src
+    tar -xzf {{SOURCE}}/artifacts/compressed/artifacts.tgz -C {{SOURCE}}/artifacts/src
