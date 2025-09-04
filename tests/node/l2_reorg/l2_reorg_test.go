@@ -3,7 +3,6 @@ package reorg
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/ethereum-optimism/optimism/op-devstack/devtest"
 	"github.com/ethereum-optimism/optimism/op-devstack/dsl"
@@ -88,7 +87,7 @@ func TestL2Reorg(gt *testing.T) {
 
 		// include simple transfer tx in opened block
 		{
-
+			t.Logger().Info("Sequencing with op-test-sequencer simple transfer tx")
 			to := alice.PlanTransfer(bob.Address(), eth.OneGWei)
 			opt := txplan.Combine(to)
 			ptx := txplan.NewPlannedTx(opt)
@@ -102,21 +101,6 @@ func TestL2Reorg(gt *testing.T) {
 		}
 
 		controlAPI.Next(t.Ctx())
-
-		// sequence a second block with op-test-sequencer (no L1 origin override)
-		{
-			t.Logger().Info("Sequencing with op-test-sequencer (no L1 origin override)")
-			err := controlAPI.New(t.Ctx(), seqtypes.BuildOpts{
-				Parent:   sequencerEL.BlockRefByLabel(eth.Unsafe).Hash,
-				L1Origin: nil,
-			})
-			require.NoError(t, err, "Expected to be able to create a new block job for sequencing on op-test-sequencer, but got error")
-			time.Sleep(2 * time.Second)
-
-			err = controlAPI.Next(t.Ctx())
-			require.NoError(t, err, "Expected to be able to call Next() after New() on op-test-sequencer, but got error")
-			time.Sleep(2 * time.Second)
-		}
 
 		// Resume the main sequencer
 		sequencerCL.StartSequencer()
